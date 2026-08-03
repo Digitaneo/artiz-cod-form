@@ -1,11 +1,35 @@
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+import { healthRoute } from "./routes/health.js";
 
-    if (url.pathname === '/health') {
-      return Response.json({ ok: true, service: 'artiz-cod-form-worker' });
+export default {
+
+    async fetch(request, env) {
+
+        const url = new URL(request.url);
+
+        if (url.pathname === "/health") {
+
+            return healthRoute(request, env);
+
+        }
+
+        return Response.json(
+
+            {
+
+                ok:false,
+
+                error:"Route not found"
+
+            },
+
+            {
+
+                status:404
+
+            }
+
+        );
+
     }
 
-    return Response.json({ ok: false, error: 'Route not found' }, { status: 404 });
-  }
 };
