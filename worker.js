@@ -51,7 +51,7 @@ export default {
     
 
       // ==========================================
-      // api Check
+      // api Check digitaneo
       // ==========================================
       case "/settings/save":
 
