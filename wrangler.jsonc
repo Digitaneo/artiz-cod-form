@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/wrangler/main/packages/wrangler/config-schema.json",
+  "name": "artiz-cod-form-worker",
+  "main": "worker.js",
+  "compatibility_date": "2024-10-01"
+}
