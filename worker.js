@@ -1,4 +1,5 @@
 import { healthRoute } from "./routes/health.js";
+import { installRoute } from "./routes/install.js";
 
 export default {
 
@@ -7,28 +8,20 @@ export default {
         const url = new URL(request.url);
 
         if (url.pathname === "/health") {
-
             return healthRoute(request, env);
-
         }
 
-        return Response.json(
+        if (url.pathname === "/install") {
+            return installRoute(request, env);
+        }
 
-            {
+        return Response.json({
 
-                ok:false,
+            ok:false,
 
-                error:"Route not found"
+            error:"Route not found"
 
-            },
-
-            {
-
-                status:404
-
-            }
-
-        );
+        },{status:404});
 
     }
 

@@ -1,11 +1,15 @@
-export async function getAccessToken(env, shop) {
-  const data = await env.SHOPIFY_CONFIG.get(shop);
+import crypto from "node:crypto";
 
-  if (!data) {
-    return null;
-  }
+export function generateNonce() {
+    return crypto.randomBytes(16).toString("hex");
+}
 
-  const config = JSON.parse(data);
+export function buildInstallUrl(shop, env, nonce) {
 
-  return config.access_token;
+    const scopes = env.SCOPES;
+
+    const redirectUri =
+        `${env.APP_URL}/callback`;
+
+    return `https://${shop}/admin/oauth/authorize?client_id=${env.SHOPIFY_API_KEY}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
 }
