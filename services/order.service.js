@@ -54,10 +54,38 @@ export class OrderService {
     const shopCountry = await this.getShopCountry(shop);
     const targetCountry = customer.country || shopCountry || "Morocco";
 
+    // Format phone to clean E.164 standard (no spaces) so Shopify creates customer and contact info
+    const cleanPhoneDigits = String(customer.phone || "").trim().replace(/[\s\-\(\)]/g, "");
+    let formattedPhone = cleanPhoneDigits;
+    if (!formattedPhone.startsWith("+")) {
+      if (formattedPhone.startsWith("00")) {
+        formattedPhone = "+" + formattedPhone.slice(2);
+      } else {
+        const countryPrefixes = {
+          "morocco": "+212",
+          "saudi arabia": "+966",
+          "united arab emirates": "+971",
+          "egypt": "+20",
+          "kuwait": "+965",
+          "qatar": "+974",
+          "oman": "+968",
+          "bahrain": "+973",
+          "algeria": "+213",
+          "tunisia": "+216"
+        };
+        const prefix = countryPrefixes[targetCountry.toLowerCase()] || "+212";
+        formattedPhone = formattedPhone.startsWith("0")
+          ? `${prefix}${formattedPhone.slice(1)}`
+          : `${prefix}${formattedPhone}`;
+      }
+    }
+
     // Attempt 1: Direct REST Order Creation (Fast, Single-step, Native COD)
     try {
       const restOrderPayload = {
         order: {
+          phone: formattedPhone,
+          email: customer.email || undefined,
           line_items: items.map(item => {
             const rawId = String(item.variantId).replace("gid://shopify/ProductVariant/", "");
             return {
@@ -68,12 +96,23 @@ export class OrderService {
           customer: {
             first_name: firstName,
             last_name: lastName,
-            phone: customer.phone,
+            phone: formattedPhone,
+            email: customer.email || undefined,
+            verified_email: false,
+            send_email_welcome: false
+          },
+          billing_address: {
+            first_name: firstName,
+            last_name: lastName,
+            phone: formattedPhone,
+            address1: customer.address,
+            city: customer.city || "الدار البيضاء",
+            country: targetCountry
           },
           shipping_address: {
             first_name: firstName,
             last_name: lastName,
-            phone: customer.phone,
+            phone: formattedPhone,
             address1: customer.address,
             city: customer.city || "الدار البيضاء",
             country: targetCountry
@@ -112,7 +151,7 @@ export class OrderService {
           orderNumber: order.name,
           customer: {
             name: `${firstName} ${lastName}`.trim(),
-            phone: customer.phone,
+            phone: formattedPhone,
             city: customer.city,
             address: customer.address
           },
@@ -124,14 +163,14 @@ export class OrderService {
         };
 
         await this.ordersRepo.saveCODOrder(shop, numericOrderId, codOrderRecord);
-        await this.customerService.recordOrderForCustomer(shop, customer.phone, codOrderRecord);
+        await this.customerService.recordOrderForCustomer(shop, formattedPhone, codOrderRecord);
         await this.analyticsService.recordNewOrder(shop, orderTotal);
 
         return {
           orderId: numericOrderId,
           orderNumber: order.name,
           total: `${orderTotal} ${order.currency}`,
-          thankYouUrl: `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`
+          thankYouUrl: order.order_status_url || `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`
         };
       }
     } catch (restErr) {
