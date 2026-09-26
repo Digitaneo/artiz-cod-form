@@ -43,4 +43,39 @@ export class ShopifyService {
 
     return json;
   }
+
+  async restRequest(shop, endpoint, method = "GET", data = null) {
+    const settings = await this.settingsRepo.getStoreConfig(shop);
+
+    if (!settings) {
+      throw new Error(`Shop not installed: ${shop}`);
+    }
+
+    if (!settings.accessToken) {
+      throw new Error(`Missing Shopify Access Token for shop: ${shop}`);
+    }
+
+    const url = `https://${shop}/admin/api/${VERSION_CONFIG.shopifyApiVersion}/${endpoint}`;
+    const options = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": settings.accessToken,
+      },
+    };
+
+    if (data && (method === "POST" || method === "PUT")) {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(url, options);
+    const json = await response.json();
+
+    if (!response.ok) {
+      const err = json.errors ? JSON.stringify(json.errors) : JSON.stringify(json);
+      throw new Error(`Shopify REST API Error [${response.status}]: ${err}`);
+    }
+
+    return json;
+  }
 }

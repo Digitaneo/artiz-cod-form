@@ -42,6 +42,91 @@ export class OrderService {
       tags.push(`discount_${options.discountCode}`);
     }
 
+    // Attempt 1: Direct REST Order Creation (Fast, Single-step, Native COD)
+    try {
+      const restOrderPayload = {
+        order: {
+          line_items: items.map(item => {
+            const rawId = String(item.variantId).replace("gid://shopify/ProductVariant/", "");
+            return {
+              variant_id: Number(rawId),
+              quantity: Number(item.quantity || 1)
+            };
+          }),
+          customer: {
+            first_name: firstName,
+            last_name: lastName,
+            phone: customer.phone,
+          },
+          shipping_address: {
+            first_name: firstName,
+            last_name: lastName,
+            phone: customer.phone,
+            address1: customer.address,
+            city: customer.city || "الرياض",
+            country: customer.country || "Saudi Arabia"
+          },
+          financial_status: "pending",
+          tags: tags.join(", "),
+          note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
+          note_attributes: customAttributes.map(a => ({ name: String(a.key), value: String(a.value) })),
+          shipping_lines: [
+            {
+              title: "الدفع عند الاستلام (COD Shipping)",
+              price: String(shippingPrice || 0)
+            }
+          ]
+        }
+      };
+
+      if (options.discountCode) {
+        restOrderPayload.order.discount_codes = [
+          {
+            code: options.discountCode,
+            amount: String(options.discountAmount || 0),
+            type: "percentage"
+          }
+        ];
+      }
+
+      const restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
+      if (restRes?.order) {
+        const order = restRes.order;
+        const numericOrderId = String(order.id);
+        const orderTotal = Number(order.total_price || 0);
+
+        const codOrderRecord = {
+          orderId: `gid://shopify/Order/${numericOrderId}`,
+          orderNumber: order.name,
+          customer: {
+            name: `${firstName} ${lastName}`.trim(),
+            phone: customer.phone,
+            city: customer.city,
+            address: customer.address
+          },
+          total: orderTotal,
+          currency: order.currency,
+          codStage: "NEW",
+          callStatus: "PENDING",
+          createdAt: new Date().toISOString()
+        };
+
+        await this.ordersRepo.saveCODOrder(shop, numericOrderId, codOrderRecord);
+        await this.customerService.recordOrderForCustomer(shop, customer.phone, codOrderRecord);
+        await this.analyticsService.recordNewOrder(shop, orderTotal);
+
+        return {
+          orderId: numericOrderId,
+          orderNumber: order.name,
+          total: `${orderTotal} ${order.currency}`,
+          thankYouUrl: `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`
+        };
+      }
+    } catch (restErr) {
+      console.warn("Direct REST order creation fallback to draft order:", restErr?.message);
+    }
+
+    // Attempt 2: DraftOrder GraphQL fallback
     const draftOrderMutation = `
       mutation createCODOrder($input: DraftOrderInput!) {
         draftOrderCreate(input: $input) {
