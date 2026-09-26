@@ -2,6 +2,7 @@
 // Automated Build Verification
 import { publicCheckoutRoute } from "./routes/public-checkout.js";
 import { publicOrderDetailsRoute } from "./routes/public-order-details.js";
+import { publicFormConfigRoute } from "./routes/public-form-config.js";
 import { dashboardSummary } from "./routes/dashboard-summary.js";
 import { currentShop } from "./routes/current-shop.js";
 import { systemStatus } from "./routes/system-status.js";
@@ -49,6 +50,10 @@ export default {
 
         case ROUTE_PATHNAMES.PUBLIC_ORDER_DETAILS:
           response = await publicOrderDetailsRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.PUBLIC_FORM_CONFIG:
+          response = await publicFormConfigRoute(request, env);
           break;
 
         case ROUTE_PATHNAMES.DASHBOARD_SUMMARY:

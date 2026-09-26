@@ -4,7 +4,16 @@ import { successResponse, errorResponse } from "../middleware/response.js";
 export async function publicCheckoutRoute(request, env) {
   try {
     const body = await request.json();
-    const { shop, customer, items, shippingPrice = 0, note = "" } = body;
+    const {
+      shop,
+      customer,
+      items,
+      shippingPrice = 0,
+      note = "",
+      discountCode = "",
+      affiliate = {},
+      customAttributes = []
+    } = body;
 
     if (!shop) {
       return errorResponse("Missing shop domain", "MISSING_SHOP", 400);
@@ -19,7 +28,11 @@ export async function publicCheckoutRoute(request, env) {
     }
 
     const orderService = new OrderService(env);
-    const result = await orderService.createPublicCODOrder(shop, customer, items, shippingPrice, note);
+    const result = await orderService.createPublicCODOrder(shop, customer, items, shippingPrice, note, {
+      discountCode,
+      affiliate,
+      customAttributes
+    });
 
     return successResponse(result, 200);
   } catch (err) {

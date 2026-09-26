@@ -12,7 +12,7 @@ export class OrderService {
     this.analyticsService = new AnalyticsService(env);
   }
 
-  async createPublicCODOrder(shop, customer, items, shippingPrice = 0, note = "") {
+  async createPublicCODOrder(shop, customer, items, shippingPrice = 0, note = "", options = {}) {
     const nameParts = customer.name.trim().split(" ");
     const firstName = nameParts[0] || "Customer";
     const lastName = nameParts.slice(1).join(" ") || "-";
@@ -24,6 +24,24 @@ export class OrderService {
       quantity: Number(item.quantity || 1)
     }));
 
+    const tags = ["Artiz COD OS", "Cash on Delivery", "Pending Confirmation"];
+    const customAttributes = Array.isArray(options.customAttributes) ? [...options.customAttributes] : [];
+
+    // Capture Affiliate tracking data for BixGrow, GoAffPro, UpPromote, etc.
+    if (options.affiliate && typeof options.affiliate === "object") {
+      for (const [key, value] of Object.entries(options.affiliate)) {
+        if (value) {
+          customAttributes.push({ key, value: String(value) });
+          tags.push(`affiliate_${key}:${String(value).slice(0, 30)}`);
+        }
+      }
+    }
+
+    if (options.discountCode) {
+      customAttributes.push({ key: "discount_code", value: String(options.discountCode) });
+      tags.push(`discount_${options.discountCode}`);
+    }
+
     const draftOrderMutation = `
       mutation createCODOrder($input: DraftOrderInput!) {
         draftOrderCreate(input: $input) {
@@ -33,24 +51,41 @@ export class OrderService {
       }
     `;
 
-    const draftOrderVariables = {
-      input: {
-        lineItems,
-        note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
-        tags: ["Artiz COD OS", "Cash on Delivery", "Pending Confirmation"],
-        shippingAddress: {
-          firstName,
-          lastName,
-          phone: customer.phone,
-          address1: customer.address,
-          city: customer.city || "Default City",
-          country: customer.country || "Saudi Arabia"
-        },
-        shippingLine: {
-          title: "Cash On Delivery Shipping",
-          price: Number(shippingPrice)
-        }
+    const draftOrderInput = {
+      lineItems,
+      note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
+      tags,
+      customAttributes,
+      shippingAddress: {
+        firstName,
+        lastName,
+        phone: customer.phone,
+        address1: customer.address,
+        city: customer.city || "Default City",
+        country: customer.country || "Saudi Arabia"
+      },
+      shippingLine: {
+        title: "Cash On Delivery Shipping",
+        price: Number(shippingPrice)
       }
+    };
+
+    if (options.discountAmount && Number(options.discountAmount) > 0) {
+      draftOrderInput.appliedDiscount = {
+        title: options.discountCode || "COD Discount",
+        value: Number(options.discountAmount),
+        valueType: "FIXED_AMOUNT"
+      };
+    } else if (options.discountPercent && Number(options.discountPercent) > 0) {
+      draftOrderInput.appliedDiscount = {
+        title: options.discountCode || "COD Discount",
+        value: Number(options.discountPercent),
+        valueType: "PERCENTAGE"
+      };
+    }
+
+    const draftOrderVariables = {
+      input: draftOrderInput
     };
 
     const draftData = await this.shopifyService.adminRequest(shop, draftOrderMutation, draftOrderVariables);
