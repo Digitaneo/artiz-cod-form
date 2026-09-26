@@ -1,3 +1,5 @@
+// Artiz COD Form - Cloudflare Worker Engine
+// Automated Build Verification
 import { publicCheckoutRoute } from "./routes/public-checkout.js";
 import { publicOrderDetailsRoute } from "./routes/public-order-details.js";
 import { dashboardSummary } from "./routes/dashboard-summary.js";
