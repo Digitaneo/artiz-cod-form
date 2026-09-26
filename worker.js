@@ -1,132 +1,113 @@
+import { publicCheckoutRoute } from "./routes/public-checkout.js";
+import { publicOrderDetailsRoute } from "./routes/public-order-details.js";
+import { dashboardSummary } from "./routes/dashboard-summary.js";
+import { currentShop } from "./routes/current-shop.js";
+import { systemStatus } from "./routes/system-status.js";
+import { ordersListRoute } from "./routes/orders-list.js";
 import { settingsSaveRoute } from "./routes/settings-save.js";
 import { settingsGetRoute } from "./routes/settings-get.js";
+import { settingsRegisterRoute } from "./routes/settings-register.js";
 import { healthRoute } from "./routes/health.js";
 import { installRoute } from "./routes/install.js";
 import { callbackRoute } from "./routes/callback.js";
+import { getOpenApiSpec } from "./routes/docs.js";
+
+import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
+import { authMiddleware } from "./middleware/auth.js";
+import { handleGlobalError } from "./middleware/errors.js";
+import { Logger } from "./middleware/logger.js";
+import { successResponse, errorResponse } from "./middleware/response.js";
+import { ROUTE_PATHNAMES } from "./config/routes.js";
 
 export default {
-
   async fetch(request, env) {
+    const startTime = Date.now();
+
+    // 1. CORS Preflight
+    const corsPreflight = handleCors(request);
+    if (corsPreflight) return corsPreflight;
 
     const url = new URL(request.url);
+    let shop = "N/A";
+    let response;
 
-    switch (url.pathname) {
-
-
-      case "/settings/save-test":
-
-    return settingsSaveRoute(
-        new Request(request.url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-
-                shop: "iuq7xa-0g.myshopify.com",
-
-                settings: {
-
-                    country: "SA",
-
-                    currency: "SAR",
-
-                    shippingPrice: 25,
-
-                    freeShippingFrom: 200,
-
-                    orderTag: "Artiz COD",
-
-                    checkoutPage: "/pages/checkout"
-
-                }
-
-            })
-
-        }),
-
-        env
-
-    );
-    
-
-      // ==========================================
-      // api Check digitaneo
-      // ==========================================
-      case "/settings/save":
-
-        return settingsSaveRoute(request, env);
-
-      // ==========================================
-      // kv Check
-      // ==========================================
-
-      case "/settings":
-         return settingsGetRoute(request, env);
-
-      // ==========================================
-      // Health Check
-      // ==========================================
-
-      case "/health":
-        return healthRoute(request, env);
-
-      // ==========================================
-      // Shopify Install
-      // ==========================================
-
-      case "/install":
-        return installRoute(request, env);
-
-      // ==========================================
-      // Shopify OAuth Callback
-      // ==========================================
-
-      case "/callback":
-        return callbackRoute(request, env);
-
-      // ==========================================
-      // KV Test
-      // ==========================================
-
-      case "/kv-test": {
-
-        await env.SHOPIFY_CONFIG.put("test", "hello");
-
-        const value = await env.SHOPIFY_CONFIG.get("test");
-
-        return Response.json({
-          ok: true,
-          value
-        });
-
+    try {
+      // 2. Auth Middleware — gates all non-public routes
+      const auth = await authMiddleware(request, env);
+      if (!auth.ok) {
+        return applyCorsHeaders(auth.response);
       }
-      case "/kv-list": {
+      if (auth.shop) shop = auth.shop;
 
-      const list = await env.SHOPIFY_CONFIG.list();
+      // 3. Route Dispatcher
+      switch (url.pathname) {
+        case ROUTE_PATHNAMES.PUBLIC_CHECKOUT:
+          response = await publicCheckoutRoute(request, env);
+          break;
 
-      return Response.json(list);
+        case ROUTE_PATHNAMES.PUBLIC_ORDER_DETAILS:
+          response = await publicOrderDetailsRoute(request, env);
+          break;
 
-  }
+        case ROUTE_PATHNAMES.DASHBOARD_SUMMARY:
+          response = await dashboardSummary(request, env);
+          break;
 
-      // ==========================================
-      // 404
-      // ==========================================
+        case ROUTE_PATHNAMES.CURRENT_SHOP:
+          response = await currentShop(request, env);
+          break;
 
-      default:
+        case ROUTE_PATHNAMES.ORDERS_LIST:
+          response = await ordersListRoute(request, env);
+          break;
 
-        return Response.json(
-          {
-            ok: false,
-            error: "Route not found"
-          },
-          {
-            status: 404
-          }
-        );
+        case ROUTE_PATHNAMES.SYSTEM_STATUS: {
+          const statusData = await systemStatus(request, env);
+          shop = statusData.shop || shop;
+          response = successResponse(statusData);
+          break;
+        }
 
+        case ROUTE_PATHNAMES.SETTINGS_SAVE:
+          response = await settingsSaveRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.SETTINGS_GET:
+          response = await settingsGetRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.SETTINGS_REGISTER:
+          response = await settingsRegisterRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.HEALTH:
+          response = await healthRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.INSTALL:
+          response = await installRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.CALLBACK:
+          response = await callbackRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.DOCS_OPENAPI:
+          response = successResponse(getOpenApiSpec());
+          break;
+
+        default:
+          response = errorResponse("Route not found", "NOT_FOUND", 404);
+          break;
+      }
+    } catch (err) {
+      response = handleGlobalError(err, request, shop, startTime);
     }
 
-  }
+    // 4. Structured Logger — every request logged
+    Logger.log(shop, url.pathname, Date.now() - startTime, response.status);
 
+    // 5. Apply CORS headers to every response
+    return applyCorsHeaders(response);
+  },
 };

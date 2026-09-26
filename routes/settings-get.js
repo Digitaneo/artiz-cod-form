@@ -1,24 +1,8 @@
+import { getCurrentShop } from "../utils/session.js";
+
 export async function settingsGetRoute(request, env) {
+  const shop = await getCurrentShop(request, env);
 
-    const url = new URL(request.url);
-
-    const shop = url.searchParams.get("shop");
-
-    if (!shop) {
-
-        return Response.json({
-
-            ok: false,
-
-            error: "Missing shop"
-
-        }, {
-
-            status: 400
-
-        });
-
-    }
 
     const data = await env.SHOPIFY_CONFIG.get(shop);
 

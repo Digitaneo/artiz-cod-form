@@ -1,24 +1,10 @@
+import { getCurrentShop } from "../utils/session.js";
+
 export async function settingsSaveRoute(request, env) {
+  const shop = await getCurrentShop(request, env);
+  const body = await request.json();
+  const { settings } = body;
 
-    const body = await request.json();
-
-    const { shop, settings } = body;
-
-    if (!shop) {
-
-        return Response.json({
-
-            ok: false,
-
-            error: "Missing shop"
-
-        }, {
-
-            status: 400
-
-        });
-
-    }
 
     const oldData = await env.SHOPIFY_CONFIG.get(shop);
 

@@ -1,0 +1,21 @@
+{
+  "themeEngineVersion": "1.0.0",
+  "extensionName": "artiz-cod-extension",
+  "assets": [
+    "assets/custom-checkout.js",
+    "assets/custom-checkout.css",
+    "assets/thank-you.js",
+    "assets/thank-you.css"
+  ],
+  "blocks": [
+    "blocks/cod-checkout-form.liquid",
+    "blocks/thank-you-summary.liquid"
+  ],
+  "snippets": [
+    "snippets/address-selector.liquid"
+  ],
+  "locales": [
+    "locales/ar.json",
+    "locales/en.default.json"
+  ]
+}

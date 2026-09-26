@@ -11,12 +11,15 @@ export async function callbackRoute(request, env) {
 
         if (!shop || !code) {
 
-            return Response.json({
-                ok: false,
-                error: "Missing shop or code"
-            }, {
-                status: 400
-            });
+            return Response.json(
+                {
+                    ok: false,
+                    error: "Missing shop or code"
+                },
+                {
+                    status: 400
+                }
+            );
 
         }
 
@@ -65,17 +68,23 @@ export async function callbackRoute(request, env) {
 
     catch (e) {
 
-        return Response.json({
+        return Response.json(
 
-            ok: false,
+            {
 
-            error: e.message
+                ok: false,
 
-        }, {
+                error: e.message
 
-            status: 500
+            },
 
-        });
+            {
+
+                status: 500
+
+            }
+
+        );
 
     }
 
