@@ -147,19 +147,21 @@ export class OrderService {
         };
       }
 
-      // Check if customer already exists by phone to link customer directly
-      let existingCustomerId = null;
-      try {
-        const searchRes = await this.shopifyService.restRequest(
-          shop,
-          `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
-          "GET"
-        );
-        if (searchRes?.customers && searchRes.customers.length > 0) {
-          existingCustomerId = searchRes.customers[0].id;
+      // Check if customer ID was provided directly (e.g. logged in user) or search by phone
+      let existingCustomerId = customer.id ? Number(customer.id) : null;
+      if (!existingCustomerId) {
+        try {
+          const searchRes = await this.shopifyService.restRequest(
+            shop,
+            `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
+            "GET"
+          );
+          if (searchRes?.customers && searchRes.customers.length > 0) {
+            existingCustomerId = searchRes.customers[0].id;
+          }
+        } catch (searchErr) {
+          console.warn("Customer phone search warning:", searchErr?.message);
         }
-      } catch (searchErr) {
-        console.warn("Customer phone search warning:", searchErr?.message);
       }
 
       if (existingCustomerId) {
