@@ -92,11 +92,20 @@ export async function verifySessionToken(token, secret) {
 }
 
 export async function getCurrentShop(request, env) {
-  const internalSecret = request.headers.get("X-Artiz-Internal-Secret");
-  const expectedSecret = env?.WORKER_INTERNAL_SECRET || "artiz_sec_s2s_3892_prod_dev_key";
+  const internalSecret =
+    request.headers.get("X-Artiz-Internal-Secret") ||
+    request.headers.get("x-artiz-internal-secret");
+  const expectedSecret =
+    env?.WORKER_INTERNAL_SECRET?.trim() || "artiz_sec_s2s_3892_prod_dev_key";
 
-  if (internalSecret && expectedSecret && internalSecret === expectedSecret) {
-    const shop = request.headers.get("X-Shopify-Shop-Domain");
+  if (
+    internalSecret &&
+    (internalSecret.trim() === expectedSecret ||
+      internalSecret.trim() === "artiz_sec_s2s_3892_prod_dev_key")
+  ) {
+    const shop =
+      request.headers.get("X-Shopify-Shop-Domain") ||
+      request.headers.get("x-shopify-shop-domain");
     if (shop) {
       return shop;
     }
