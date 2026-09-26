@@ -12,6 +12,15 @@ export class OrderService {
     this.analyticsService = new AnalyticsService(env);
   }
 
+  async getShopCountry(shop) {
+    try {
+      const res = await this.shopifyService.adminRequest(shop, "{ shop { billingAddress { country countryCodeV2 } } }");
+      return res.data?.shop?.billingAddress?.country || "Morocco";
+    } catch {
+      return "Morocco";
+    }
+  }
+
   async createPublicCODOrder(shop, customer, items, shippingPrice = 0, note = "", options = {}) {
     const nameParts = customer.name.trim().split(" ");
     const firstName = nameParts[0] || "Customer";
@@ -42,6 +51,9 @@ export class OrderService {
       tags.push(`discount_${options.discountCode}`);
     }
 
+    const shopCountry = await this.getShopCountry(shop);
+    const targetCountry = customer.country || shopCountry || "Morocco";
+
     // Attempt 1: Direct REST Order Creation (Fast, Single-step, Native COD)
     try {
       const restOrderPayload = {
@@ -63,8 +75,8 @@ export class OrderService {
             last_name: lastName,
             phone: customer.phone,
             address1: customer.address,
-            city: customer.city || "الرياض",
-            country: customer.country || "Saudi Arabia"
+            city: customer.city || "الدار البيضاء",
+            country: targetCountry
           },
           financial_status: "pending",
           tags: tags.join(", "),
@@ -147,7 +159,7 @@ export class OrderService {
         phone: customer.phone,
         address1: customer.address,
         city: customer.city || "Default City",
-        country: customer.country || "Saudi Arabia"
+        country: targetCountry
       },
       shippingLine: {
         title: "Cash On Delivery Shipping",
