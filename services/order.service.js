@@ -80,7 +80,159 @@ export class OrderService {
       }
     }
 
-    // Attempt 1: Direct REST Order Creation (Fast, Single-step, Native COD)
+    // Lookup existing customer ID by phone if not passed directly
+    let existingCustomerId = customer.id ? Number(customer.id) : null;
+    if (!existingCustomerId) {
+      try {
+        const searchRes = await this.shopifyService.restRequest(
+          shop,
+          `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
+          "GET"
+        );
+        if (searchRes?.customers && searchRes.customers.length > 0) {
+          existingCustomerId = searchRes.customers[0].id;
+        }
+      } catch (searchErr) {
+        console.warn("Customer phone search warning:", searchErr?.message);
+      }
+    }
+
+    // Method 1: DraftOrder Instant Completion (Primary: Enables Shopify Admin Order Editing, Customer Profile Link & Addresses)
+    try {
+      const draftOrderMutation = `
+        mutation createCODOrder($input: DraftOrderInput!) {
+          draftOrderCreate(input: $input) {
+            draftOrder { id name }
+            userErrors { field message }
+          }
+        }
+      `;
+
+      const draftOrderInput = {
+        lineItems,
+        note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
+        tags,
+        customAttributes,
+        shippingAddress: {
+          firstName,
+          lastName,
+          phone: formattedPhone,
+          address1: customer.address,
+          city: customer.city || "الدار البيضاء",
+          country: targetCountry
+        },
+        billingAddress: {
+          firstName,
+          lastName,
+          phone: formattedPhone,
+          address1: customer.address,
+          city: customer.city || "الدار البيضاء",
+          country: targetCountry
+        },
+        phone: formattedPhone,
+        email: customer.email || undefined,
+        shippingLine: {
+          title: "الدفع عند الاستلام (COD Shipping)",
+          price: Number(shippingPrice || 0)
+        }
+      };
+
+      if (existingCustomerId) {
+        draftOrderInput.purchasingEntity = {
+          customerId: `gid://shopify/Customer/${existingCustomerId}`
+        };
+      }
+
+      if (options.discountAmount && Number(options.discountAmount) > 0) {
+        draftOrderInput.appliedDiscount = {
+          title: options.discountCode || "COD Discount",
+          value: Number(options.discountAmount),
+          valueType: "FIXED_AMOUNT"
+        };
+      } else if (options.discountPercent && Number(options.discountPercent) > 0) {
+        draftOrderInput.appliedDiscount = {
+          title: options.discountCode || "COD Discount",
+          value: Number(options.discountPercent),
+          valueType: "PERCENTAGE"
+        };
+      }
+
+      const draftData = await this.shopifyService.adminRequest(shop, draftOrderMutation, { input: draftOrderInput });
+
+      if (draftData.data?.draftOrderCreate?.userErrors?.length > 0) {
+        const errs = draftData.data.draftOrderCreate.userErrors.map(e => e.message).join(", ");
+        throw new Error(`Shopify Draft Order Error: ${errs}`);
+      }
+
+      const draftOrderId = draftData.data.draftOrderCreate.draftOrder.id;
+
+      const completeMutation = `
+        mutation completeCODOrder($id: ID!) {
+          draftOrderComplete(id: $id, paymentPending: true) {
+            draftOrder {
+              order {
+                id
+                name
+                totalPriceSet { shopMoney { amount currencyCode } }
+              }
+            }
+            userErrors { field message }
+          }
+        }
+      `;
+
+      const completeData = await this.shopifyService.adminRequest(shop, completeMutation, { id: draftOrderId });
+
+      if (completeData.data?.draftOrderComplete?.userErrors?.length > 0) {
+        const errs = completeData.data.draftOrderComplete.userErrors.map(e => e.message).join(", ");
+        throw new Error(`Shopify Complete Order Error: ${errs}`);
+      }
+
+      const createdOrder = completeData.data.draftOrderComplete.draftOrder.order;
+      const numericOrderId = createdOrder.id.split("/").pop();
+      const orderTotal = Number(createdOrder.totalPriceSet?.shopMoney?.amount || 0);
+      const currency = createdOrder.totalPriceSet?.shopMoney?.currencyCode || "MAD";
+
+      // Fetch order details for order_status_url
+      let thankYouUrl = `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`;
+      try {
+        const orderDetails = await this.shopifyService.restRequest(shop, `orders/${numericOrderId}.json`, "GET");
+        if (orderDetails?.order?.order_status_url) {
+          thankYouUrl = orderDetails.order.order_status_url;
+        }
+      } catch (_) {}
+
+      const codOrderRecord = {
+        orderId: `gid://shopify/Order/${numericOrderId}`,
+        orderNumber: createdOrder.name,
+        customer: {
+          name: `${firstName} ${lastName}`.trim(),
+          phone: formattedPhone,
+          city: customer.city,
+          address: customer.address
+        },
+        total: orderTotal,
+        currency,
+        codStage: "NEW",
+        callStatus: "PENDING",
+        createdAt: new Date().toISOString()
+      };
+
+      await this.ordersRepo.saveCODOrder(shop, numericOrderId, codOrderRecord);
+      await this.customerService.recordOrderForCustomer(shop, formattedPhone, codOrderRecord);
+      await this.analyticsService.recordNewOrder(shop, orderTotal);
+
+      return {
+        orderId: numericOrderId,
+        orderNumber: createdOrder.name,
+        total: `${orderTotal} ${currency}`,
+        thankYouUrl
+      };
+    } catch (draftErr) {
+      console.warn("Draft order creation failed, falling back to direct REST order:", draftErr?.message);
+    }
+
+    // Method 2: Fallback to Direct REST Order Creation
     try {
       const restOrderPayload = {
         order: {
@@ -93,7 +245,7 @@ export class OrderService {
               quantity: Number(item.quantity || 1)
             };
           }),
-          customer: {
+          customer: existingCustomerId ? { id: existingCustomerId } : {
             first_name: firstName,
             last_name: lastName,
             phone: formattedPhone,
@@ -147,48 +299,7 @@ export class OrderService {
         };
       }
 
-      // Check if customer ID was provided directly (e.g. logged in user) or search by phone
-      let existingCustomerId = customer.id ? Number(customer.id) : null;
-      if (!existingCustomerId) {
-        try {
-          const searchRes = await this.shopifyService.restRequest(
-            shop,
-            `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
-            "GET"
-          );
-          if (searchRes?.customers && searchRes.customers.length > 0) {
-            existingCustomerId = searchRes.customers[0].id;
-          }
-        } catch (searchErr) {
-          console.warn("Customer phone search warning:", searchErr?.message);
-        }
-      }
-
-      if (existingCustomerId) {
-        restOrderPayload.order.customer = { id: existingCustomerId };
-      }
-
-      let restRes = null;
-      try {
-        restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
-      } catch (createErr) {
-        if (createErr?.message?.includes("has already been taken")) {
-          const fallbackSearch = await this.shopifyService.restRequest(
-            shop,
-            `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
-            "GET"
-          );
-          if (fallbackSearch?.customers?.[0]?.id) {
-            restOrderPayload.order.customer = { id: fallbackSearch.customers[0].id };
-            restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
-          } else {
-            throw createErr;
-          }
-        } else {
-          throw createErr;
-        }
-      }
-
+      const restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
       if (restRes?.order) {
         const order = restRes.order;
         const numericOrderId = String(order.id);
@@ -222,122 +333,8 @@ export class OrderService {
         };
       }
     } catch (restErr) {
-      console.warn("Direct REST order creation fallback to draft order:", restErr?.message);
+      throw new Error(`Order Creation Failed: ${restErr?.message}`);
     }
-
-    // Attempt 2: DraftOrder GraphQL fallback
-    const draftOrderMutation = `
-      mutation createCODOrder($input: DraftOrderInput!) {
-        draftOrderCreate(input: $input) {
-          draftOrder { id name }
-          userErrors { field message }
-        }
-      }
-    `;
-
-    const draftOrderInput = {
-      lineItems,
-      note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
-      tags,
-      customAttributes,
-      shippingAddress: {
-        firstName,
-        lastName,
-        phone: customer.phone,
-        address1: customer.address,
-        city: customer.city || "Default City",
-        country: targetCountry
-      },
-      shippingLine: {
-        title: "Cash On Delivery Shipping",
-        price: Number(shippingPrice)
-      }
-    };
-
-    if (options.discountAmount && Number(options.discountAmount) > 0) {
-      draftOrderInput.appliedDiscount = {
-        title: options.discountCode || "COD Discount",
-        value: Number(options.discountAmount),
-        valueType: "FIXED_AMOUNT"
-      };
-    } else if (options.discountPercent && Number(options.discountPercent) > 0) {
-      draftOrderInput.appliedDiscount = {
-        title: options.discountCode || "COD Discount",
-        value: Number(options.discountPercent),
-        valueType: "PERCENTAGE"
-      };
-    }
-
-    const draftOrderVariables = {
-      input: draftOrderInput
-    };
-
-    const draftData = await this.shopifyService.adminRequest(shop, draftOrderMutation, draftOrderVariables);
-
-    if (draftData.data?.draftOrderCreate?.userErrors?.length > 0) {
-      const errs = draftData.data.draftOrderCreate.userErrors.map(e => e.message).join(", ");
-      throw new Error(`Shopify Draft Order Error: ${errs}`);
-    }
-
-    const draftOrderId = draftData.data.draftOrderCreate.draftOrder.id;
-
-    const completeMutation = `
-      mutation completeCODOrder($id: ID!) {
-        draftOrderComplete(id: $id, paymentPending: true) {
-          draftOrder {
-            order {
-              id
-              name
-              totalPriceSet { shopMoney { amount currencyCode } }
-            }
-          }
-          userErrors { field message }
-        }
-      }
-    `;
-
-    const completeData = await this.shopifyService.adminRequest(shop, completeMutation, { id: draftOrderId });
-
-    if (completeData.data?.draftOrderComplete?.userErrors?.length > 0) {
-      const errs = completeData.data.draftOrderComplete.userErrors.map(e => e.message).join(", ");
-      throw new Error(`Shopify Complete Order Error: ${errs}`);
-    }
-
-    const createdOrder = completeData.data.draftOrderComplete.draftOrder.order;
-    const numericOrderId = createdOrder.id.split("/").pop();
-    const orderTotal = Number(createdOrder.totalPriceSet?.shopMoney?.amount || 0);
-
-    const codOrderRecord = {
-      orderId: createdOrder.id,
-      orderNumber: createdOrder.name,
-      customer: {
-        name: `${firstName} ${lastName}`.trim(),
-        phone: customer.phone,
-        city: customer.city,
-        address: customer.address
-      },
-      total: orderTotal,
-      currency: createdOrder.totalPriceSet?.shopMoney?.currencyCode,
-      codStage: "NEW",
-      callStatus: "PENDING",
-      createdAt: new Date().toISOString()
-    };
-
-    // Persist order in KV via Repository (single point of KV access)
-    await this.ordersRepo.saveCODOrder(shop, numericOrderId, codOrderRecord);
-
-    // Track customer history (async, non-blocking impact)
-    await this.customerService.recordOrderForCustomer(shop, customer.phone, codOrderRecord);
-
-    // Update daily analytics
-    await this.analyticsService.recordNewOrder(shop, orderTotal);
-
-    return {
-      orderId: numericOrderId,
-      orderNumber: createdOrder.name,
-      total: `${orderTotal} ${createdOrder.totalPriceSet?.shopMoney?.currencyCode}`,
-      thankYouUrl: `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`
-    };
   }
 
   async getPublicOrderDetails(shop, orderId) {
