@@ -3,5 +3,5 @@ export const VERSION_CONFIG = {
   themeVersion: "1.0.0",
   extensionVersion: "1.0.0",
   databaseVersion: "1.0.0",
-  shopifyApiVersion: "2026-07"
+  shopifyApiVersion: "2024-07"
 };
