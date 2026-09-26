@@ -140,7 +140,46 @@ export class OrderService {
         ];
       }
 
-      const restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
+      // Check if customer already exists by phone to link customer directly
+      let existingCustomerId = null;
+      try {
+        const searchRes = await this.shopifyService.restRequest(
+          shop,
+          `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
+          "GET"
+        );
+        if (searchRes?.customers && searchRes.customers.length > 0) {
+          existingCustomerId = searchRes.customers[0].id;
+        }
+      } catch (searchErr) {
+        console.warn("Customer phone search warning:", searchErr?.message);
+      }
+
+      if (existingCustomerId) {
+        restOrderPayload.order.customer = { id: existingCustomerId };
+      }
+
+      let restRes = null;
+      try {
+        restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
+      } catch (createErr) {
+        if (createErr?.message?.includes("has already been taken")) {
+          const fallbackSearch = await this.shopifyService.restRequest(
+            shop,
+            `customers/search.json?query=${encodeURIComponent("phone:" + formattedPhone)}`,
+            "GET"
+          );
+          if (fallbackSearch?.customers?.[0]?.id) {
+            restOrderPayload.order.customer = { id: fallbackSearch.customers[0].id };
+            restRes = await this.shopifyService.restRequest(shop, "orders.json", "POST", restOrderPayload);
+          } else {
+            throw createErr;
+          }
+        } else {
+          throw createErr;
+        }
+      }
+
       if (restRes?.order) {
         const order = restRes.order;
         const numericOrderId = String(order.id);
