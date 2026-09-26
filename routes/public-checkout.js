@@ -27,11 +27,18 @@ export async function publicCheckoutRoute(request, env) {
       return errorResponse("Cart is empty", "EMPTY_CART", 400);
     }
 
+    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+    const userAgent = request.headers.get("user-agent") || "";
+
     const orderService = new OrderService(env);
     const result = await orderService.createPublicCODOrder(shop, customer, items, shippingPrice, note, {
       discountCode,
       affiliate,
-      customAttributes
+      customAttributes,
+      clientDetails: {
+        browser_ip: clientIp,
+        user_agent: userAgent
+      }
     });
 
     return successResponse(result, 200);

@@ -140,6 +140,13 @@ export class OrderService {
         ];
       }
 
+      if (options.clientDetails) {
+        restOrderPayload.order.client_details = {
+          browser_ip: options.clientDetails.browser_ip || undefined,
+          user_agent: options.clientDetails.user_agent || undefined
+        };
+      }
+
       // Check if customer already exists by phone to link customer directly
       let existingCustomerId = null;
       try {
