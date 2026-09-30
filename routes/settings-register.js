@@ -31,6 +31,9 @@ export async function settingsRegisterRoute(request, env) {
     }
 
     config.accessToken = accessToken;
+    if (body.refreshToken) config.refreshToken = body.refreshToken;
+    if (body.clientId) config.clientId = body.clientId;
+    if (body.clientSecret) config.clientSecret = body.clientSecret;
     config.shop = shop;
 
     await env.SHOPIFY_CONFIG.put(shop, JSON.stringify(config));

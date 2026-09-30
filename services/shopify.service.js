@@ -11,6 +11,36 @@ export class ShopifyService {
     return `https://${shop}/admin/api/${VERSION_CONFIG.shopifyApiVersion}/graphql.json`;
   }
 
+  async refreshAccessToken(shop, settings) {
+    if (!settings.refreshToken || !settings.clientId || !settings.clientSecret) {
+      return null;
+    }
+    try {
+      const res = await fetch(`https://${shop}/admin/oauth/access_token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: settings.clientId,
+          client_secret: settings.clientSecret,
+          grant_type: "refresh_token",
+          refresh_token: settings.refreshToken,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.access_token) {
+        settings.accessToken = data.access_token;
+        if (data.refresh_token) {
+          settings.refreshToken = data.refresh_token;
+        }
+        await this.settingsRepo.saveStoreConfig(shop, settings);
+        return data.access_token;
+      }
+    } catch (e) {
+      console.error("[ShopifyService] Auto-refresh token failed:", e);
+    }
+    return null;
+  }
+
   async adminRequest(shop, query, variables = {}) {
     const settings = await this.settingsRepo.getStoreConfig(shop);
 
@@ -22,16 +52,26 @@ export class ShopifyService {
       throw new Error(`Missing Shopify Access Token for shop: ${shop}`);
     }
 
-    const response = await fetch(this.getAdminUrl(shop), {
+    const options = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Shopify-Access-Token": settings.accessToken,
       },
       body: JSON.stringify({ query, variables }),
-    });
+    };
 
-    const json = await response.json();
+    let response = await fetch(this.getAdminUrl(shop), options);
+    let json = await response.json();
+
+    if (response.status === 401 && settings.refreshToken) {
+      const newToken = await this.refreshAccessToken(shop, settings);
+      if (newToken) {
+        options.headers["X-Shopify-Access-Token"] = newToken;
+        response = await fetch(this.getAdminUrl(shop), options);
+        json = await response.json();
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`Shopify API HTTP ${response.status}: ${JSON.stringify(json)}`);
@@ -68,8 +108,17 @@ export class ShopifyService {
       options.body = JSON.stringify(data);
     }
 
-    const response = await fetch(url, options);
-    const json = await response.json();
+    let response = await fetch(url, options);
+    let json = await response.json();
+
+    if (response.status === 401 && settings.refreshToken) {
+      const newToken = await this.refreshAccessToken(shop, settings);
+      if (newToken) {
+        options.headers["X-Shopify-Access-Token"] = newToken;
+        response = await fetch(url, options);
+        json = await response.json();
+      }
+    }
 
     if (!response.ok) {
       const err = json.errors ? JSON.stringify(json.errors) : JSON.stringify(json);
