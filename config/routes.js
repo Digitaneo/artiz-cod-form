@@ -12,5 +12,11 @@ export const ROUTE_PATHNAMES = {
   HEALTH: "/health",
   INSTALL: "/install",
   CALLBACK: "/callback",
-  DOCS_OPENAPI: "/docs/openapi.json"
+  DOCS_OPENAPI: "/docs/openapi.json",
+  SHIPPING_GET: "/shipping/rates",
+  SHIPPING_SAVE: "/shipping/save",
+  SHIPPING_IMPORT_CSV: "/shipping/import-csv",
+  SHIPPING_IMPORT_SHOPIFY: "/shipping/import-shopify",
+  PUBLIC_SHIPPING_CALCULATE: "/public/shipping/calculate"
 };
+

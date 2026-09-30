@@ -14,6 +14,11 @@ import { healthRoute } from "./routes/health.js";
 import { installRoute } from "./routes/install.js";
 import { callbackRoute } from "./routes/callback.js";
 import { getOpenApiSpec } from "./routes/docs.js";
+import { shippingRatesGetRoute } from "./routes/shipping-rates-get.js";
+import { shippingRatesSaveRoute } from "./routes/shipping-rates-save.js";
+import { shippingImportCsvRoute } from "./routes/shipping-import-csv.js";
+import { shippingImportShopifyRoute } from "./routes/shipping-import-shopify.js";
+import { publicShippingCalculateRoute } from "./routes/public-shipping-calculate.js";
 
 import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -101,6 +106,26 @@ export default {
 
         case ROUTE_PATHNAMES.DOCS_OPENAPI:
           response = successResponse(getOpenApiSpec());
+          break;
+
+        case ROUTE_PATHNAMES.SHIPPING_GET:
+          response = await shippingRatesGetRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.SHIPPING_SAVE:
+          response = await shippingRatesSaveRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.SHIPPING_IMPORT_CSV:
+          response = await shippingImportCsvRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.SHIPPING_IMPORT_SHOPIFY:
+          response = await shippingImportShopifyRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.PUBLIC_SHIPPING_CALCULATE:
+          response = await publicShippingCalculateRoute(request, env);
           break;
 
         default:

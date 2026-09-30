@@ -9,6 +9,7 @@ export async function publicCheckoutRoute(request, env) {
       customer,
       items,
       shippingPrice = 0,
+      shippingTitle = "توصيل سريع لجميع المدن",
       note = "",
       discountCode = "",
       affiliate = {},
@@ -35,6 +36,7 @@ export async function publicCheckoutRoute(request, env) {
       discountCode,
       affiliate,
       customAttributes,
+      shippingTitle,
       clientDetails: {
         browser_ip: clientIp,
         user_agent: userAgent

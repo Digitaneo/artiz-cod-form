@@ -1,4 +1,5 @@
 import { successResponse, errorResponse } from "../middleware/response.js";
+import { ShippingService } from "../services/shipping.service.js";
 
 export const DEFAULT_FORM_CONFIG = {
   displayMode: "popup_modal", // popup_modal | slide_drawer | inline_form | sticky_bar
@@ -16,7 +17,7 @@ export const DEFAULT_FORM_CONFIG = {
     address: true,
     note: false
   },
-  citiesList: ["الرياض", "جدة", "مكة المكرمة", "المدينة المنورة", "الدمام", "أخرى"],
+  citiesList: ["الدار البيضاء", "الرباط", "مراكش", "فاس", "طنجة", "أكادير", "مكناس", "وجدة", "القنيطرة", "تطوان", "الرياض", "جدة", "أخرى"],
   directBuyTrigger: true, // Auto attach to product Buy Now button
   cartDrawerTrigger: true // Auto attach to cart checkout button
 };
@@ -31,17 +32,19 @@ export async function publicFormConfigRoute(request, env) {
     }
 
     const rawData = await env.SHOPIFY_CONFIG.get(shop);
-    if (!rawData) {
-      return successResponse({ formConfig: DEFAULT_FORM_CONFIG }, 200);
+    let formConfig = { ...DEFAULT_FORM_CONFIG };
+    if (rawData) {
+      const shopData = JSON.parse(rawData);
+      formConfig = {
+        ...DEFAULT_FORM_CONFIG,
+        ...(shopData.settings?.formConfig || shopData.formConfig || {})
+      };
     }
 
-    const shopData = JSON.parse(rawData);
-    const formConfig = {
-      ...DEFAULT_FORM_CONFIG,
-      ...(shopData.settings?.formConfig || shopData.formConfig || {})
-    };
+    const shippingService = new ShippingService(env);
+    const shippingConfig = await shippingService.getConfig(shop);
 
-    return successResponse({ formConfig }, 200);
+    return successResponse({ formConfig, shippingConfig }, 200);
   } catch (err) {
     return errorResponse(err.message || "Failed to load form config", "CONFIG_LOAD_FAILED", 500);
   }

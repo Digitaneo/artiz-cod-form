@@ -26,12 +26,18 @@ export class OrderService {
     const firstName = nameParts[0] || "Customer";
     const lastName = nameParts.slice(1).join(" ") || "-";
 
-    const lineItems = items.map(item => ({
-      variantId: String(item.variantId).includes("gid://")
-        ? item.variantId
-        : `gid://shopify/ProductVariant/${item.variantId}`,
-      quantity: Number(item.quantity || 1)
-    }));
+    const lineItems = items.map(item => {
+      const lineItem = {
+        variantId: String(item.variantId).includes("gid://")
+          ? item.variantId
+          : `gid://shopify/ProductVariant/${item.variantId}`,
+        quantity: Number(item.quantity || 1)
+      };
+      if (item.price !== undefined && item.price !== null && Number(item.price) >= 0) {
+        lineItem.originalUnitPrice = String(Number(item.price).toFixed(2));
+      }
+      return lineItem;
+    });
 
     const tags = ["Artiz COD OS", "Cash on Delivery", "Pending Confirmation"];
     const customAttributes = Array.isArray(options.customAttributes) ? [...options.customAttributes] : [];
@@ -132,7 +138,7 @@ export class OrderService {
         phone: formattedPhone,
         email: customer.email || undefined,
         shippingLine: {
-          title: "الدفع عند الاستلام (COD Shipping)",
+          title: options.shippingTitle || "توصيل سريع لجميع المدن",
           price: Number(shippingPrice || 0)
         }
       };
@@ -240,10 +246,14 @@ export class OrderService {
           email: customer.email || undefined,
           line_items: items.map(item => {
             const rawId = String(item.variantId).replace("gid://shopify/ProductVariant/", "");
-            return {
+            const restItem = {
               variant_id: Number(rawId),
               quantity: Number(item.quantity || 1)
             };
+            if (item.price !== undefined && item.price !== null) {
+              restItem.price = String(Number(item.price).toFixed(2));
+            }
+            return restItem;
           }),
           customer: existingCustomerId ? { id: existingCustomerId } : {
             first_name: firstName,
@@ -275,8 +285,8 @@ export class OrderService {
           note_attributes: customAttributes.map(a => ({ name: String(a.key), value: String(a.value) })),
           shipping_lines: [
             {
-              title: "الدفع عند الاستلام (COD Shipping)",
-              price: String(shippingPrice || 0)
+              title: options.shippingTitle || "توصيل سريع لجميع المدن",
+              price: String(Number(shippingPrice || 0).toFixed(2))
             }
           ]
         }
