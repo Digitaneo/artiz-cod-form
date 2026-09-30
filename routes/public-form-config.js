@@ -43,6 +43,14 @@ export async function publicFormConfigRoute(request, env) {
 
     const shippingService = new ShippingService(env);
     const shippingConfig = await shippingService.getConfig(shop);
+    let shopCurrency = "MAD";
+    try {
+      const res = await shippingService.shopifyService.adminRequest(shop, "{ shop { currencyCode } }");
+      if (res.data?.shop?.currencyCode) {
+        shopCurrency = res.data.shop.currencyCode;
+      }
+    } catch (_) {}
+    shippingConfig.shopCurrency = shopCurrency;
 
     return successResponse({ formConfig, shippingConfig }, 200);
   } catch (err) {

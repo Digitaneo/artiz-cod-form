@@ -9,7 +9,15 @@ export async function shippingRatesGetRoute(request, env) {
 
     const shippingService = new ShippingService(env);
     const config = await shippingService.getConfig(shop);
-    return successResponse({ config });
+    let shopCurrency = "MAD";
+    try {
+      const res = await shippingService.shopifyService.adminRequest(shop, "{ shop { currencyCode } }");
+      if (res.data?.shop?.currencyCode) {
+        shopCurrency = res.data.shop.currencyCode;
+      }
+    } catch (_) {}
+
+    return successResponse({ config, shopCurrency });
   } catch (err) {
     return errorResponse(err.message || "Failed to get shipping config", "SHIPPING_GET_FAILED", 500);
   }
