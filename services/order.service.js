@@ -61,6 +61,7 @@ export class OrderService {
       return lineItem;
     });
 
+    const cleanCustomerNote = (note || customer.note || "").trim();
     const tags = ["Artiz COD OS", "Cash on Delivery", "Pending Confirmation"];
     const customAttributes = Array.isArray(options.customAttributes) ? [...options.customAttributes] : [];
 
@@ -168,7 +169,7 @@ export class OrderService {
 
       const draftOrderInput = {
         lineItems,
-        note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
+        note: cleanCustomerNote || undefined,
         tags,
         customAttributes,
         shippingAddress: {
@@ -338,7 +339,7 @@ export class OrderService {
           },
           financial_status: "pending",
           tags: tags.join(", "),
-          note: `COD Order via Artiz COD OS. Note: ${note || customer.note || "N/A"}`,
+          note: cleanCustomerNote || undefined,
           note_attributes: customAttributes.map(a => ({ name: String(a.key), value: String(a.value) })),
           shipping_lines: [
             {
