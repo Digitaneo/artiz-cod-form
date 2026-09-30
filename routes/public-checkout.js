@@ -12,6 +12,8 @@ export async function publicCheckoutRoute(request, env) {
       shippingTitle = "توصيل سريع لجميع المدن",
       note = "",
       discountCode = "",
+      discountAmount = 0,
+      discountPercent = 0,
       affiliate = {},
       customAttributes = []
     } = body;
@@ -34,6 +36,8 @@ export async function publicCheckoutRoute(request, env) {
     const orderService = new OrderService(env);
     const result = await orderService.createPublicCODOrder(shop, customer, items, shippingPrice, note, {
       discountCode,
+      discountAmount,
+      discountPercent,
       affiliate,
       customAttributes,
       shippingTitle,

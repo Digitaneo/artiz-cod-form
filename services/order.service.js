@@ -33,9 +33,31 @@ export class OrderService {
           : `gid://shopify/ProductVariant/${item.variantId}`,
         quantity: Number(item.quantity || 1)
       };
-      if (item.price !== undefined && item.price !== null && Number(item.price) >= 0) {
-        lineItem.originalUnitPrice = String(Number(item.price).toFixed(2));
+
+      const unitDiscount = Number(item.unitDiscount || 0);
+      const originalPrice = Number(item.originalPrice || 0);
+      const price = Number(item.price || 0);
+
+      // Apply line-level discount if present
+      if (unitDiscount > 0) {
+        lineItem.appliedDiscount = {
+          title: item.discountTitle || "تخفيض السلة (خصم)",
+          value: unitDiscount,
+          valueType: "FIXED_AMOUNT"
+        };
+      } else if (originalPrice > price && price > 0) {
+        const diff = Number((originalPrice - price).toFixed(2));
+        if (diff > 0) {
+          lineItem.appliedDiscount = {
+            title: item.discountTitle || "تخفيض السلة (خصم)",
+            value: diff,
+            valueType: "FIXED_AMOUNT"
+          };
+        }
+      } else if (price > 0) {
+        lineItem.originalUnitPrice = String(price.toFixed(2));
       }
+
       return lineItem;
     });
 
@@ -103,6 +125,36 @@ export class OrderService {
       }
     }
 
+    // Sync clean address to existing customer profile
+    if (existingCustomerId) {
+      try {
+        await this.shopifyService.restRequest(
+          shop,
+          `customers/${existingCustomerId}.json`,
+          "PUT",
+          {
+            customer: {
+              id: existingCustomerId,
+              addresses: [
+                {
+                  address1: customer.address,
+                  city: customer.city || "الدار البيضاء",
+                  province: customer.region || customer.province || undefined,
+                  country: targetCountry,
+                  phone: formattedPhone,
+                  first_name: firstName,
+                  last_name: lastName,
+                  default: true
+                }
+              ]
+            }
+          }
+        );
+      } catch (updateCustErr) {
+        console.warn("Customer profile address sync warning:", updateCustErr?.message);
+      }
+    }
+
     // Method 1: DraftOrder Instant Completion (Primary: Enables Shopify Admin Order Editing, Customer Profile Link & Addresses)
     try {
       const draftOrderMutation = `
@@ -125,6 +177,7 @@ export class OrderService {
           phone: formattedPhone,
           address1: customer.address,
           city: customer.city || "الدار البيضاء",
+          province: customer.region || customer.province || undefined,
           country: targetCountry
         },
         billingAddress: {
@@ -133,6 +186,7 @@ export class OrderService {
           phone: formattedPhone,
           address1: customer.address,
           city: customer.city || "الدار البيضاء",
+          province: customer.region || customer.province || undefined,
           country: targetCountry
         },
         phone: formattedPhone,
@@ -215,6 +269,7 @@ export class OrderService {
           name: `${firstName} ${lastName}`.trim(),
           phone: formattedPhone,
           city: customer.city,
+          province: customer.region || customer.province || "",
           address: customer.address
         },
         total: orderTotal,
@@ -269,6 +324,7 @@ export class OrderService {
             phone: formattedPhone,
             address1: customer.address,
             city: customer.city || "الدار البيضاء",
+            province: customer.region || customer.province || undefined,
             country: targetCountry
           },
           shipping_address: {
@@ -277,6 +333,7 @@ export class OrderService {
             phone: formattedPhone,
             address1: customer.address,
             city: customer.city || "الدار البيضاء",
+            province: customer.region || customer.province || undefined,
             country: targetCountry
           },
           financial_status: "pending",
