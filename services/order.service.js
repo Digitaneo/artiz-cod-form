@@ -82,6 +82,12 @@ export class OrderService {
 
     const shopCountry = await this.getShopCountry(shop);
     const targetCountry = customer.country || shopCountry || "Morocco";
+    const defaultCity = customer.city || (
+      targetCountry.toLowerCase() === "iraq" ? "بغداد" :
+      targetCountry.toLowerCase() === "algeria" ? "الجزائر" :
+      targetCountry.toLowerCase() === "saudi arabia" ? "الرياض" :
+      "الدار البيضاء"
+    );
 
     // Format phone to clean E.164 standard (no spaces) so Shopify creates customer and contact info
     const cleanPhoneDigits = String(customer.phone || "").trim().replace(/[\s\-\(\)]/g, "");
@@ -94,6 +100,7 @@ export class OrderService {
           "morocco": "+212",
           "saudi arabia": "+966",
           "united arab emirates": "+971",
+          "iraq": "+964",
           "egypt": "+20",
           "kuwait": "+965",
           "qatar": "+974",
@@ -139,7 +146,7 @@ export class OrderService {
               addresses: [
                 {
                   address1: customer.address,
-                  city: customer.city || "الدار البيضاء",
+                  city: defaultCity,
                   province: customer.region || customer.province || undefined,
                   country: targetCountry,
                   phone: formattedPhone,
@@ -177,7 +184,7 @@ export class OrderService {
           lastName,
           phone: formattedPhone,
           address1: customer.address,
-          city: customer.city || "الدار البيضاء",
+          city: defaultCity,
           province: customer.region || customer.province || undefined,
           country: targetCountry
         },
@@ -186,7 +193,7 @@ export class OrderService {
           lastName,
           phone: formattedPhone,
           address1: customer.address,
-          city: customer.city || "الدار البيضاء",
+          city: defaultCity,
           province: customer.region || customer.province || undefined,
           country: targetCountry
         },
@@ -298,6 +305,7 @@ export class OrderService {
     try {
       const restOrderPayload = {
         order: {
+          processed_at: new Date().toISOString(),
           phone: formattedPhone,
           email: customer.email || undefined,
           line_items: items.map(item => {
@@ -324,7 +332,7 @@ export class OrderService {
             last_name: lastName,
             phone: formattedPhone,
             address1: customer.address,
-            city: customer.city || "الدار البيضاء",
+            city: defaultCity,
             province: customer.region || customer.province || undefined,
             country: targetCountry
           },
@@ -333,7 +341,7 @@ export class OrderService {
             last_name: lastName,
             phone: formattedPhone,
             address1: customer.address,
-            city: customer.city || "الدار البيضاء",
+            city: defaultCity,
             province: customer.region || customer.province || undefined,
             country: targetCountry
           },
