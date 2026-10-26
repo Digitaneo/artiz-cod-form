@@ -19,6 +19,7 @@ import { shippingRatesSaveRoute } from "./routes/shipping-rates-save.js";
 import { shippingImportCsvRoute } from "./routes/shipping-import-csv.js";
 import { shippingImportShopifyRoute } from "./routes/shipping-import-shopify.js";
 import { publicShippingCalculateRoute } from "./routes/public-shipping-calculate.js";
+import { webhooksWaylRoute } from "./routes/webhooks-wayl.js";
 
 import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -126,6 +127,10 @@ export default {
 
         case ROUTE_PATHNAMES.PUBLIC_SHIPPING_CALCULATE:
           response = await publicShippingCalculateRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.WEBHOOK_WAYL:
+          response = await webhooksWaylRoute(request, env);
           break;
 
         default:

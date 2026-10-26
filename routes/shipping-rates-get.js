@@ -9,7 +9,7 @@ export async function shippingRatesGetRoute(request, env) {
 
     const shippingService = new ShippingService(env);
     const config = await shippingService.getConfig(shop);
-    let shopCurrency = "MAD";
+    let shopCurrency = "USD";
     try {
       const res = await shippingService.shopifyService.adminRequest(shop, "{ shop { currencyCode } }");
       if (res.data?.shop?.currencyCode) {

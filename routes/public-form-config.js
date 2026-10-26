@@ -3,9 +3,22 @@ import { ShippingService } from "../services/shipping.service.js";
 
 export const DEFAULT_FORM_CONFIG = {
   displayMode: "popup_modal", // popup_modal | slide_drawer | inline_form | sticky_bar
-  buttonText: "اشتري الآن - الدفع عند الاستلام",
-  formTitle: "إتمام الطلب - الدفع عند الاستلام",
-  primaryColor: "#008060",
+  buttonMode: "replace",
+  showAddToCartButton: true,
+  // --- UI Text Identifiers ---
+  buttonText: "أطلب الآن",
+  submitButtonText: "إكمال الدفع",
+  formTitle: "معلومات الطلب",
+  addToCartButtonText: "أضف إلى السلة",
+  addingToCartText: "جاري الإضافة...",
+  addedToCartText: "✓ تمت الإضافة",
+  cartCheckoutButtonText: "إتمام الطلب",
+  submittingOrderText: "جاري تأكيد وتسجيل طلبك...",
+  outOfStockText: "غير متوفر",
+  checkoutCartOnlyText: "إتمام طلب السلة",
+  emptyCartText: "السلة فارغة",
+  emptyCartAlert: "سلة التسوق فارغة، يرجى إضافة منتجات أولاً.",
+  primaryColor: "#020a25",
   secondaryColor: "#ffffff",
   enableDiscounts: true,
   enableAffiliateTracking: true,
@@ -43,7 +56,7 @@ export async function publicFormConfigRoute(request, env) {
 
     const shippingService = new ShippingService(env);
     const shippingConfig = await shippingService.getConfig(shop);
-    let shopCurrency = "MAD";
+    let shopCurrency = "USD";
     try {
       const res = await shippingService.shopifyService.adminRequest(shop, "{ shop { currencyCode } }");
       if (res.data?.shop?.currencyCode) {
@@ -52,7 +65,11 @@ export async function publicFormConfigRoute(request, env) {
     } catch (_) {}
     shippingConfig.shopCurrency = shopCurrency;
 
-    return successResponse({ formConfig, shippingConfig }, 200);
+    const { PaymentManagerService } = await import("../services/payment/payment-manager.service.js");
+    const paymentManager = new PaymentManagerService(env);
+    const paymentConfig = await paymentManager.getStoreConfig(shop);
+
+    return successResponse({ formConfig, shippingConfig, paymentConfig }, 200);
   } catch (err) {
     return errorResponse(err.message || "Failed to load form config", "CONFIG_LOAD_FAILED", 500);
   }

@@ -1,4 +1,5 @@
 import { OrderService } from "../services/order.service.js";
+import { PaymentManagerService } from "../services/payment/payment-manager.service.js";
 import { successResponse, errorResponse } from "../middleware/response.js";
 
 export async function publicCheckoutRoute(request, env) {
@@ -15,7 +16,9 @@ export async function publicCheckoutRoute(request, env) {
       discountAmount = 0,
       discountPercent = 0,
       affiliate = {},
-      customAttributes = []
+      customAttributes = [],
+      paymentMethod = "cod",
+      currency = "IQD"
     } = body;
 
     if (!shop) {
@@ -34,17 +37,29 @@ export async function publicCheckoutRoute(request, env) {
     const userAgent = request.headers.get("user-agent") || "";
 
     const orderService = new OrderService(env);
-    const result = await orderService.createPublicCODOrder(shop, customer, items, shippingPrice, note, {
-      discountCode,
-      discountAmount,
-      discountPercent,
-      affiliate,
-      customAttributes,
-      shippingTitle,
-      clientDetails: {
-        browser_ip: clientIp,
-        user_agent: userAgent
-      }
+    const paymentManager = new PaymentManagerService(env);
+
+    const result = await paymentManager.processCheckout({
+      shop,
+      customer,
+      items,
+      shippingPrice,
+      note,
+      options: {
+        paymentMethod,
+        currency,
+        discountCode,
+        discountAmount,
+        discountPercent,
+        affiliate,
+        customAttributes,
+        shippingTitle,
+        clientDetails: {
+          browser_ip: clientIp,
+          user_agent: userAgent
+        }
+      },
+      orderService
     });
 
     return successResponse(result, 200);

@@ -17,6 +17,7 @@ export const ROUTE_PATHNAMES = {
   SHIPPING_SAVE: "/shipping/save",
   SHIPPING_IMPORT_CSV: "/shipping/import-csv",
   SHIPPING_IMPORT_SHOPIFY: "/shipping/import-shopify",
-  PUBLIC_SHIPPING_CALCULATE: "/public/shipping/calculate"
+  PUBLIC_SHIPPING_CALCULATE: "/public/shipping/calculate",
+  WEBHOOK_WAYL: "/webhooks/wayl"
 };
 

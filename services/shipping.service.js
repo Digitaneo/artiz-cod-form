@@ -146,9 +146,9 @@ export class ShippingService {
     const countryIdx = headers.findIndex(h => h === "country_code" || h.includes("country"));
     const regionIdx = headers.findIndex(h => h === "region" || h.includes("region") || h.includes("state") || h.includes("wilaya") || h.includes("province"));
     const cityIdx = headers.findIndex(h => h === "city" || h.includes("city") || h.includes("baladiya") || h.includes("ville"));
-    const areaIdx = headers.findIndex(h => h === "area" || h.includes("area") || h.includes("district") || h.includes("quartier"));
+    const methodIdx = headers.findIndex(h => h.includes("method") || h.includes("service") || h.includes("delivery") || h === "area" || h.includes("district") || h.includes("quartier"));
     const customRatesIdx = headers.findIndex(h => h === "custom_rates" || h.includes("custom") || h.includes("methods"));
-    const rateOrExtraIdx = headers.findIndex(h => (h === "rate_or_extra" || h.includes("extra") || h === "rate" || h === "type") && !h.includes("custom"));
+    const rateOrExtraIdx = headers.findIndex(h => (h === "rate_or_extra" || h.includes("extra") || h === "rate" || h === "type") && !h.includes("custom") && !h.includes("method"));
     const costIdx = headers.findIndex(h => h === "cost" || h.includes("cost") || h.includes("price") || h.includes("tarif") || h.includes("prix"));
 
     const newRates = [];
@@ -177,18 +177,19 @@ export class ShippingService {
       const countryCode = countryIdx !== -1 && row[countryIdx] ? row[countryIdx].trim() : "";
       const region = regionIdx !== -1 && row[regionIdx] ? row[regionIdx].trim() : "";
       const city = cityIdx !== -1 && row[cityIdx] ? row[cityIdx].trim() : "";
-      const area = areaIdx !== -1 && row[areaIdx] ? row[areaIdx].trim() : "";
+      const deliveryMethod = methodIdx !== -1 && row[methodIdx] ? row[methodIdx].trim() : "";
       const rateType = rateOrExtraIdx !== -1 && row[rateOrExtraIdx] ? row[rateOrExtraIdx].trim() : "rate";
       const costRaw = costIdx !== -1 && row[costIdx] !== undefined ? String(row[costIdx]).trim().replace(/[^0-9.]/g, "") : "";
       const cost = costRaw !== "" && !isNaN(Number(costRaw)) ? Number(costRaw) : undefined;
       const customRates = customRatesIdx !== -1 && row[customRatesIdx] ? row[customRatesIdx].trim() : "";
 
-      if (countryCode || region || city || area || customRates || cost !== undefined) {
+      if (countryCode || region || city || deliveryMethod || customRates || cost !== undefined) {
         newRates.push({
           countryCode: countryCode || "MA",
           region: region || "",
           city: city || "",
-          area: area || "",
+          deliveryMethod: deliveryMethod || "",
+          area: deliveryMethod || "",
           rateType: rateType || "rate",
           cost: cost !== undefined ? cost : undefined,
           customRates: customRates || ""

@@ -62,7 +62,8 @@ export class OrderService {
     });
 
     const cleanCustomerNote = (note || customer.note || "").trim();
-    const tags = ["Artiz COD OS", "Cash on Delivery", "Pending Confirmation"];
+    const defaultTags = ["Artiz Quick Order", "Cash on Delivery", "Pending Confirmation"];
+    const tags = Array.isArray(options.tags) && options.tags.length > 0 ? [...options.tags] : defaultTags;
     const customAttributes = Array.isArray(options.customAttributes) ? [...options.customAttributes] : [];
 
     // Capture Affiliate tracking data for BixGrow, GoAffPro, UpPromote, etc.
@@ -133,8 +134,19 @@ export class OrderService {
       }
     }
 
-    // Sync clean address to existing customer profile
-    if (existingCustomerId) {
+    // Sanitize address1 to ensure city is not repeated inside address1
+    let cleanAddress = String(customer.address || "").trim();
+    if (defaultCity && cleanAddress) {
+      const cityRegexStart = new RegExp(`^${defaultCity}[\\s،,-]+`, "i");
+      const cityRegexEnd = new RegExp(`[\\s،,-]+${defaultCity}$`, "i");
+      const stripped = cleanAddress.replace(cityRegexStart, "").replace(cityRegexEnd, "").trim();
+      if (stripped.length >= 2) {
+        cleanAddress = stripped;
+      }
+    }
+
+    // Ensure customer has phone on profile if missing (without appending duplicate address records)
+    if (existingCustomerId && formattedPhone) {
       try {
         await this.shopifyService.restRequest(
           shop,
@@ -143,23 +155,12 @@ export class OrderService {
           {
             customer: {
               id: existingCustomerId,
-              addresses: [
-                {
-                  address1: customer.address,
-                  city: defaultCity,
-                  province: customer.region || customer.province || undefined,
-                  country: targetCountry,
-                  phone: formattedPhone,
-                  first_name: firstName,
-                  last_name: lastName,
-                  default: true
-                }
-              ]
+              phone: formattedPhone
             }
           }
         );
       } catch (updateCustErr) {
-        console.warn("Customer profile address sync warning:", updateCustErr?.message);
+        console.warn("Customer profile phone sync warning:", updateCustErr?.message);
       }
     }
 
@@ -183,7 +184,7 @@ export class OrderService {
           firstName,
           lastName,
           phone: formattedPhone,
-          address1: customer.address,
+          address1: cleanAddress,
           city: defaultCity,
           province: customer.region || customer.province || undefined,
           country: targetCountry
@@ -192,7 +193,7 @@ export class OrderService {
           firstName,
           lastName,
           phone: formattedPhone,
-          address1: customer.address,
+          address1: cleanAddress,
           city: defaultCity,
           province: customer.region || customer.province || undefined,
           country: targetCountry
@@ -234,9 +235,12 @@ export class OrderService {
 
       const draftOrderId = draftData.data.draftOrderCreate.draftOrder.id;
 
+      const isPaidOrder = options.paymentPending === false;
+      const paymentPendingVal = !isPaidOrder;
+
       const completeMutation = `
-        mutation completeCODOrder($id: ID!) {
-          draftOrderComplete(id: $id, paymentPending: true) {
+        mutation completeOrder($id: ID!, $paymentPending: Boolean!) {
+          draftOrderComplete(id: $id, paymentPending: $paymentPending) {
             draftOrder {
               order {
                 id
@@ -249,7 +253,10 @@ export class OrderService {
         }
       `;
 
-      const completeData = await this.shopifyService.adminRequest(shop, completeMutation, { id: draftOrderId });
+      const completeData = await this.shopifyService.adminRequest(shop, completeMutation, {
+        id: draftOrderId,
+        paymentPending: paymentPendingVal
+      });
 
       if (completeData.data?.draftOrderComplete?.userErrors?.length > 0) {
         const errs = completeData.data.draftOrderComplete.userErrors.map(e => e.message).join(", ");
@@ -259,7 +266,7 @@ export class OrderService {
       const createdOrder = completeData.data.draftOrderComplete.draftOrder.order;
       const numericOrderId = createdOrder.id.split("/").pop();
       const orderTotal = Number(createdOrder.totalPriceSet?.shopMoney?.amount || 0);
-      const currency = createdOrder.totalPriceSet?.shopMoney?.currencyCode || "MAD";
+      const currency = createdOrder.totalPriceSet?.shopMoney?.currencyCode || "USD";
 
       // Fetch order details for order_status_url
       let thankYouUrl = `/pages/thank-you?order_id=${numericOrderId}&shop=${shop}`;
@@ -282,8 +289,9 @@ export class OrderService {
         },
         total: orderTotal,
         currency,
-        codStage: "NEW",
-        callStatus: "PENDING",
+        paymentMethod: options.paymentMethod || (isPaidOrder ? "PAID_ONLINE" : "COD"),
+        codStage: isPaidOrder ? "PAID" : "NEW",
+        callStatus: isPaidOrder ? "CONFIRMED" : "PENDING",
         createdAt: new Date().toISOString()
       };
 
@@ -331,7 +339,7 @@ export class OrderService {
             first_name: firstName,
             last_name: lastName,
             phone: formattedPhone,
-            address1: customer.address,
+            address1: cleanAddress,
             city: defaultCity,
             province: customer.region || customer.province || undefined,
             country: targetCountry
@@ -340,7 +348,7 @@ export class OrderService {
             first_name: firstName,
             last_name: lastName,
             phone: formattedPhone,
-            address1: customer.address,
+            address1: cleanAddress,
             city: defaultCity,
             province: customer.region || customer.province || undefined,
             country: targetCountry
@@ -460,5 +468,19 @@ export class OrderService {
       shippingAddress: order.shippingAddress,
       items
     };
+  }
+
+  async createPublicPaidOrder(shop, customer, items, shippingPrice = 0, note = "", options = {}) {
+    const paymentMethodTitle = options.paymentMethod ? options.paymentMethod.toUpperCase() : "ELECTRONIC";
+    return await this.createPublicCODOrder(shop, customer, items, shippingPrice, note, {
+      ...options,
+      paymentPending: false,
+      tags: [
+        "Artiz Quick Order",
+        paymentMethodTitle,
+        "Paid Online",
+        options.gatewayReferenceId ? `Ref:${options.gatewayReferenceId}` : ""
+      ].filter(Boolean)
+    });
   }
 }
