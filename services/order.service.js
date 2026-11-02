@@ -64,6 +64,7 @@ export class OrderService {
         const ks = String(k).toLowerCase().trim();
         const vs = String(v !== undefined && v !== null ? v : "").toLowerCase().trim();
         if (ks.startsWith("bg_flag_") || ks.includes("_flag_") || ks.includes("flag_app")) return true;
+        if (ks === "bgaffilite_id" || ks.startsWith("bgaffilite") || ks === "bgaffiliate_id" || ks.startsWith("bg_affilite") || ks.startsWith("bgaff")) return true;
         if (vs === "called" || vs === "true" || vs === "false" || vs === "") return true;
         return false;
       };
@@ -150,6 +151,7 @@ export class OrderService {
         const ks = String(k).toLowerCase().trim();
         const vs = String(v !== undefined && v !== null ? v : "").toLowerCase().trim();
         if (ks.startsWith("bg_flag_") || ks.includes("_flag_") || ks.includes("flag_app")) return true;
+        if (ks === "bgaffilite_id" || ks.startsWith("bgaffilite") || ks === "bgaffiliate_id" || ks.startsWith("bg_affilite") || ks.startsWith("bgaff")) return true;
         if (vs === "called" || vs === "true" || vs === "false" || vs === "") return true;
         return false;
       };

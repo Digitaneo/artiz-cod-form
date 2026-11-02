@@ -72,7 +72,7 @@ export class PaymentManagerService {
       try {
         const rawAlt = await this.env.SHOPIFY_CONFIG.get(`payment_methods:${shop}`);
         if (rawAlt) customMethods = JSON.parse(rawAlt);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     if (!customMethods) {
