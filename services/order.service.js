@@ -58,27 +58,110 @@ export class OrderService {
         lineItem.originalUnitPrice = String(price.toFixed(2));
       }
 
+      // Preserve per-item line properties (e.g. BixGrow _bg_aff, _bg_click_id, GoAffPro, custom options)
+      const isInternalFlag = (k, v) => {
+        if (!k) return true;
+        const ks = String(k).toLowerCase().trim();
+        const vs = String(v !== undefined && v !== null ? v : "").toLowerCase().trim();
+        if (ks.startsWith("bg_flag_") || ks.includes("_flag_") || ks.includes("flag_app")) return true;
+        if (vs === "called" || vs === "true" || vs === "false" || vs === "") return true;
+        return false;
+      };
+
+      const itemCustomAttrs = [];
+      if (item.properties && typeof item.properties === "object") {
+        if (Array.isArray(item.properties)) {
+          for (const prop of item.properties) {
+            if (prop && (prop.key || prop.name) && prop.value !== undefined && prop.value !== null) {
+              const pk = String(prop.key || prop.name);
+              const pv = String(prop.value);
+              if (!isInternalFlag(pk, pv)) {
+                itemCustomAttrs.push({ key: pk, value: pv });
+              }
+            }
+          }
+        } else {
+          for (const [k, v] of Object.entries(item.properties)) {
+            if (v !== undefined && v !== null && String(v).trim() !== "" && !isInternalFlag(k, v)) {
+              itemCustomAttrs.push({
+                key: String(k),
+                value: String(v)
+              });
+            }
+          }
+        }
+      } else if (Array.isArray(item.customAttributes)) {
+        for (const attr of item.customAttributes) {
+          if (attr && attr.key && attr.value !== undefined && attr.value !== null && !isInternalFlag(attr.key, attr.value)) {
+            itemCustomAttrs.push({ key: String(attr.key), value: String(attr.value) });
+          }
+        }
+      }
+
+      // If affiliate tracking is present globally and item does not have it, attach clean tracking
+      if (options.affiliate && typeof options.affiliate === "object") {
+        for (const [affKey, affVal] of Object.entries(options.affiliate)) {
+          if (affVal && !isInternalFlag(affKey, affVal) && !itemCustomAttrs.some(a => a.key === affKey)) {
+            itemCustomAttrs.push({ key: String(affKey), value: String(affVal) });
+          }
+        }
+      }
+
+      if (itemCustomAttrs.length > 0) {
+        lineItem.customAttributes = itemCustomAttrs;
+      }
+
       return lineItem;
     });
 
     const cleanCustomerNote = (note || customer.note || "").trim();
-    const defaultTags = ["Artiz Quick Order", "Cash on Delivery", "Pending Confirmation"];
-    const tags = Array.isArray(options.tags) && options.tags.length > 0 ? [...options.tags] : defaultTags;
+
+    // Clean Tags: strictly include configured Order Tag (default: "Artiz-Form") and Payment Method (e.g. "Cash on Delivery")
+    const tags = [];
+    const mainOrderTag = (options.orderTag && typeof options.orderTag === "string" && options.orderTag.trim())
+      ? options.orderTag.trim()
+      : "Artiz-Form";
+    tags.push(mainOrderTag);
+
+    if (Array.isArray(options.tags) && options.tags.length > 0) {
+      for (const t of options.tags) {
+        if (
+          t &&
+          t !== "Artiz COD OS" &&
+          t !== "Artiz Quick Order" &&
+          t !== "Pending Confirmation" &&
+          !tags.includes(t)
+        ) {
+          tags.push(t);
+        }
+      }
+    } else {
+      if (!tags.includes("Cash on Delivery")) {
+        tags.push("Cash on Delivery");
+      }
+    }
+
     const customAttributes = Array.isArray(options.customAttributes) ? [...options.customAttributes] : [];
 
-    // Capture Affiliate tracking data for BixGrow, GoAffPro, UpPromote, etc.
+    // Capture clean Affiliate tracking data for note_attributes (BixGrow, GoAffPro, UpPromote, etc.)
     if (options.affiliate && typeof options.affiliate === "object") {
+      const isInternalFlag = (k, v) => {
+        if (!k) return true;
+        const ks = String(k).toLowerCase().trim();
+        const vs = String(v !== undefined && v !== null ? v : "").toLowerCase().trim();
+        if (ks.startsWith("bg_flag_") || ks.includes("_flag_") || ks.includes("flag_app")) return true;
+        if (vs === "called" || vs === "true" || vs === "false" || vs === "") return true;
+        return false;
+      };
       for (const [key, value] of Object.entries(options.affiliate)) {
-        if (value) {
-          customAttributes.push({ key, value: String(value) });
-          tags.push(`affiliate_${key}:${String(value).slice(0, 30)}`);
+        if (value && !isInternalFlag(key, value) && !customAttributes.some(a => a.key === key)) {
+          customAttributes.push({ key: String(key), value: String(value) });
         }
       }
     }
 
     if (options.discountCode) {
       customAttributes.push({ key: "discount_code", value: String(options.discountCode) });
-      tags.push(`discount_${options.discountCode}`);
     }
 
     const shopCountry = await this.getShopCountry(shop);
@@ -325,6 +408,19 @@ export class OrderService {
             if (item.price !== undefined && item.price !== null) {
               restItem.price = String(Number(item.price).toFixed(2));
             }
+            if (item.properties && typeof item.properties === "object") {
+              if (Array.isArray(item.properties)) {
+                restItem.properties = item.properties.map(p => ({
+                  name: String(p.name || p.key),
+                  value: String(p.value)
+                }));
+              } else {
+                restItem.properties = Object.entries(item.properties).map(([name, value]) => ({
+                  name: String(name),
+                  value: String(value)
+                }));
+              }
+            }
             return restItem;
           }),
           customer: existingCustomerId ? { id: existingCustomerId } : {
@@ -353,7 +449,7 @@ export class OrderService {
             province: customer.region || customer.province || undefined,
             country: targetCountry
           },
-          financial_status: "pending",
+          financial_status: options.paymentPending === false ? "paid" : "pending",
           tags: tags.join(", "),
           note: cleanCustomerNote || undefined,
           note_attributes: customAttributes.map(a => ({ name: String(a.key), value: String(a.value) })),
@@ -476,7 +572,6 @@ export class OrderService {
       ...options,
       paymentPending: false,
       tags: [
-        "Artiz Quick Order",
         paymentMethodTitle,
         "Paid Online",
         options.gatewayReferenceId ? `Ref:${options.gatewayReferenceId}` : ""

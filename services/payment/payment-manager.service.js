@@ -161,7 +161,7 @@ export class PaymentManagerService {
         note,
         options: {
           ...options,
-          tags: ["Cash on Delivery", "Artiz COD OS"]
+          tags: ["Cash on Delivery"]
         }
       });
       return {
