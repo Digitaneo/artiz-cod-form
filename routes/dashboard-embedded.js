@@ -905,16 +905,15 @@ export async function dashboardEmbeddedRoute(request, env) {
   <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
   <script>
     function navigateTo(pageId, el, skipPush) {
-      var links = document.querySelectorAll('.nav-link, .nav-tab');
+      var links = document.querySelectorAll('.nav-link');
       for (var i = 0; i < links.length; i++) {
         links[i].classList.remove('active');
       }
       if (el) {
         el.classList.add('active');
-      }
-      var targetTabs = document.querySelectorAll('[data-page="' + pageId + '"]');
-      for (var k = 0; k < targetTabs.length; k++) {
-        targetTabs[k].classList.add('active');
+      } else {
+        var targetLink = document.querySelector('[data-page="' + pageId + '"]');
+        if (targetLink) targetLink.classList.add('active');
       }
 
       var pages = document.querySelectorAll('.page-view');
@@ -1077,58 +1076,6 @@ export async function dashboardEmbeddedRoute(request, env) {
       background: #8c5b00; color: #fff; padding: 7px 14px;
       border-radius: 6px; font-size: 12px; font-weight: bold; text-decoration: none;
       white-space: nowrap;
-    }
-
-    /* Unified Modern Navigation Tabs */
-    .app-nav-tabs {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      background: #14161a;
-      padding: 8px 10px;
-      border-radius: var(--radius-md);
-      border: 1px solid #232730;
-      margin-bottom: 22px;
-      overflow-x: auto;
-      scrollbar-width: thin;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    }
-    .nav-tab {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 9px 15px;
-      border-radius: 8px;
-      background: transparent;
-      border: 1px solid transparent;
-      color: #94a3b8;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s ease;
-      font-family: inherit;
-    }
-    .nav-tab:hover {
-      color: #f1f5f9;
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-    .nav-tab.active {
-      color: #10b981;
-      background: rgba(16, 185, 129, 0.12);
-      border-color: rgba(16, 185, 129, 0.35);
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
-    }
-    .nav-tab-badge {
-      background: #ef4444;
-      color: #fff;
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 7px;
-      border-radius: 10px;
-      margin-left: 4px;
-      letter-spacing: 0.5px;
     }
 
     /* ==================== FULL-WIDTH WORKSPACE ==================== */
@@ -2353,47 +2300,6 @@ export async function dashboardEmbeddedRoute(request, env) {
       </div>
     </header>
 
-    <!-- Unified Top Navigation Bar (Always Visible Across All Views) -->
-    <nav class="app-nav-tabs">
-      <button type="button" class="nav-tab ${initialPage === 'overview' ? 'active' : ''}" data-page="overview" onclick="navigateTo('overview', this)">
-        <span>📊</span>
-        <span>Overview</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'abandoned-orders' ? 'active' : ''}" data-page="abandoned-orders" onclick="navigateTo('abandoned-orders', this)">
-        <span>🛒</span>
-        <span>Abandoned Orders</span>
-        <span class="nav-tab-badge" id="nav-abandoned-badge" style="display: none;">0</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'form-builder' ? 'active' : ''}" data-page="form-builder" onclick="navigateTo('form-builder', this)">
-        <span>🎨</span>
-        <span>Form Builder</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'shipping' ? 'active' : ''}" data-page="shipping" onclick="navigateTo('shipping', this)">
-        <span>🚚</span>
-        <span>Shipping Rates</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'payment-methods' ? 'active' : ''}" data-page="payment-methods" onclick="navigateTo('payment-methods', this)">
-        <span>💳</span>
-        <span>Payment Methods</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'fraud-prevention' ? 'active' : ''}" data-page="fraud-prevention" onclick="navigateTo('fraud-prevention', this)">
-        <span>🛡️</span>
-        <span>Fraud Shield</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'sales-booster' ? 'active' : ''}" data-page="sales-booster" onclick="navigateTo('sales-booster', this)">
-        <span>⚡</span>
-        <span>Sales Booster</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'integrations' ? 'active' : ''}" data-page="integrations" onclick="navigateTo('integrations', this)">
-        <span>🔌</span>
-        <span>Integrations</span>
-      </button>
-      <button type="button" class="nav-tab ${initialPage === 'settings' ? 'active' : ''}" data-page="settings" onclick="navigateTo('settings', this)">
-        <span>⚙️</span>
-        <span>Settings</span>
-      </button>
-    </nav>
-
     ${needsAuth ? `
     <!-- Authorization Alert Banner -->
     <div class="auth-banner">
@@ -2419,20 +2325,6 @@ export async function dashboardEmbeddedRoute(request, env) {
 
         <!-- ==================== PAGE 1: OVERVIEW & ORDERS (COBRA STYLE) ==================== -->
         <section id="page-overview" class="page-view ${initialPage === 'overview' ? 'active' : ''}">
-
-          <!-- Overview Abandoned Checkouts Callout Banner -->
-          <div id="overview-abandoned-banner" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 14px 20px; margin-bottom: 22px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 20px;">🛒</div>
-              <div>
-                <div style="font-weight: 700; color: #fbbf24; font-size: 14px;"><span id="overview-ab-count">0</span> Abandoned Checkouts Pending Recovery</div>
-                <div style="color: #94a3b8; font-size: 12px; margin-top: 2px;">Customers attempted payment but exited. Follow up via WhatsApp to recover revenue.</div>
-              </div>
-            </div>
-            <button type="button" onclick="navigateTo('abandoned-orders')" class="btn" style="background: #fbbf24; color: #020a25; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-              View Abandoned Orders →
-            </button>
-          </div>
 
           <!-- 1. The 4 Top Vital KPI Cards -->
           <div class="dash-kpi-grid">
@@ -5438,10 +5330,8 @@ IQ,Duhok,,,,8000,</div>
         var stats = json.data?.stats || json.stats || {};
         window._abandonedCheckouts = json.data?.checkouts || json.checkouts || [];
 
-        var totalCount = stats.totalAbandoned || (window._abandonedCheckouts ? window._abandonedCheckouts.length : 0);
-
         var totalEl = document.getElementById('ab-stat-total');
-        if (totalEl) totalEl.textContent = totalCount;
+        if (totalEl) totalEl.textContent = stats.totalAbandoned || 0;
 
         var valEl = document.getElementById('ab-stat-value');
         if (valEl) valEl.innerHTML = (Number(stats.potentialLostValue || 0)).toLocaleString() + ' <span class="dash-kpi-cur">${currencyDisplay}</span>';
@@ -5451,27 +5341,6 @@ IQ,Duhok,,,,8000,</div>
 
         var contEl = document.getElementById('ab-stat-contacted');
         if (contEl) contEl.textContent = stats.contactedCount || 0;
-
-        var navBadge = document.getElementById('nav-abandoned-badge');
-        if (navBadge) {
-          if (totalCount > 0) {
-            navBadge.textContent = totalCount;
-            navBadge.style.display = 'inline-block';
-          } else {
-            navBadge.style.display = 'none';
-          }
-        }
-
-        var ovBanner = document.getElementById('overview-abandoned-banner');
-        var ovCount = document.getElementById('overview-ab-count');
-        if (ovBanner && ovCount) {
-          if (totalCount > 0) {
-            ovCount.textContent = totalCount;
-            ovBanner.style.display = 'flex';
-          } else {
-            ovBanner.style.display = 'none';
-          }
-        }
 
         window.renderAbandonedTable();
       } catch (err) {
@@ -5648,9 +5517,6 @@ IQ,Duhok,,,,8000,</div>
       var checkout = (window._abandonedCheckouts || []).find(function(c) { return c.sessionId === sessionId; });
       if (!checkout) {
         alert('Checkout details not found.');
-        return;
-      }
-        alert('بيانات السلة غير متوفرة.');
         return;
       }
       currentActiveCheckout = checkout;
