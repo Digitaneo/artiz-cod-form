@@ -943,7 +943,9 @@ export async function dashboardEmbeddedRoute(request, env) {
       }
 
       if (pageId === 'abandoned-orders') {
-        loadAbandonedOrders();
+        if (typeof window.loadAbandonedOrders === 'function') {
+          window.loadAbandonedOrders();
+        }
       }
 
       if (!skipPush) {
@@ -2701,8 +2703,9 @@ export async function dashboardEmbeddedRoute(request, env) {
               <p>Follow up with customers who hesitated or faced an issue during online payment, or convert their cart to COD with 1 click.</p>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-              <button class="btn" style="background: #dc2626; color: #fff; font-size: 12px; padding: 8px 14px;" onclick="cleanupAbandoned24h(this)">🧹 Clean Older Than 24h</button>
-              <button class="btn btn-save" onclick="loadAbandonedOrders(true)">🔄 Refresh</button>
+              <button type="button" id="ab-btn-bulk-delete" class="btn" style="background: #dc2626; color: #fff; font-size: 12px; padding: 8px 14px; display: none; align-items: center; gap: 6px;" onclick="deleteSelectedAbandoned()">🗑️ Delete Selected (<span id="ab-selected-count">0</span>)</button>
+              <button type="button" class="btn" style="background: rgba(220, 38, 38, 0.15); color: #f87171; border: 1px solid rgba(220, 38, 38, 0.35); font-size: 12px; padding: 8px 14px;" onclick="cleanupAbandoned24h(this)">🧹 Clean Older Than 24h</button>
+              <button type="button" id="ab-btn-refresh" class="btn btn-save" onclick="loadAbandonedOrders(true)"><span id="ab-refresh-spinner" style="display: none; margin-right: 4px;">⏳</span> 🔄 Refresh</button>
             </div>
           </div>
 
@@ -2765,6 +2768,7 @@ export async function dashboardEmbeddedRoute(request, env) {
               <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;" id="ab-orders-table">
                 <thead>
                   <tr style="background: rgba(15, 23, 42, 0.7); border-bottom: 1px solid #1e293b; color: #94a3b8; font-size: 12px;">
+                    <th style="width: 40px; padding: 14px 16px; text-align: center;"><input type="checkbox" id="ab-select-all" onchange="toggleSelectAllAbandoned(this)" style="cursor: pointer; width: 16px; height: 16px; accent-color: #10b981;"></th>
                     <th style="padding: 14px 16px;">Cart ID</th>
                     <th style="padding: 14px 16px;">Customer</th>
                     <th style="padding: 14px 16px;">Products</th>
@@ -2776,12 +2780,81 @@ export async function dashboardEmbeddedRoute(request, env) {
                 </thead>
                 <tbody id="ab-orders-tbody">
                   <tr>
-                    <td colspan="7" style="padding: 36px; text-align: center; color: #94a3b8;">
+                    <td colspan="8" style="padding: 36px; text-align: center; color: #94a3b8;">
                       Loading abandoned checkouts...
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- WhatsApp Templates Modal -->
+          <div id="ab-wa-modal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 20px;">
+            <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; max-width: 580px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); overflow: hidden; color: #f1f5f9; display: flex; flex-direction: column;">
+              <div style="padding: 16px 20px; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.5);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 22px;">💬</span>
+                  <div>
+                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;" id="ab-wa-modal-title">التواصل عبر واتساب</h3>
+                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;" id="ab-wa-modal-sub">...</div>
+                  </div>
+                </div>
+                <button type="button" onclick="closeAbandonedWhatsAppModal()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 6px;">✕</button>
+              </div>
+              
+              <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                <!-- Template Selector -->
+                <div>
+                  <label style="display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">اختيار القالب الجاهز:</label>
+                  <select id="ab-wa-template-select" onchange="onAbandonedTemplateChange()" style="width: 100%; padding: 10px 12px; background: #0b1329; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 13px; outline: none;">
+                    <option value="abandoned_recovery">🛒 استعادة السلة (مساعدة)</option>
+                    <option value="abandoned_discount">🎁 استعادة السلة (عرض خصم)</option>
+                    <option value="confirmation">✅ تأكيد الدفع</option>
+                    <option value="credentials">🔑 تسليم الاشتراك / الطلب</option>
+                    <option value="delay">⏳ إشعار تأخير</option>
+                    <option value="follow_up">💬 متابعة الطلب</option>
+                    <option value="review_request">⭐ طلب تقييم الخدمة</option>
+                    <option value="custom">✏️ رسالة مخصّصة</option>
+                  </select>
+                </div>
+
+                <!-- Discount Options (Conditional) -->
+                <div id="ab-wa-discount-wrap" style="display: none; grid-template-columns: 1fr 1fr; gap: 10px; background: rgba(30, 41, 59, 0.5); padding: 12px; border-radius: 8px; border: 1px solid #334155;">
+                  <div>
+                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">كود الخصم:</label>
+                    <input type="text" id="ab-wa-discount-code" value="OFFER10" oninput="onAbandonedTemplateChange()" style="width: 100%; padding: 6px 10px; background: #0b1329; border: 1px solid #475569; border-radius: 6px; color: #f59e0b; font-weight: 700; font-size: 12px;">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">نسبة الخصم (%):</label>
+                    <input type="number" id="ab-wa-discount-pct" value="10" min="1" max="100" oninput="onAbandonedTemplateChange()" style="width: 100%; padding: 6px 10px; background: #0b1329; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 12px;">
+                  </div>
+                </div>
+
+                <!-- Message Textarea Preview -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: #94a3b8;">نص الرسالة (يمكنك تعديلها قبل الإرسال):</label>
+                    <span style="font-size: 11px; color: #64748b;" id="ab-wa-char-count">0 حرف</span>
+                  </div>
+                  <textarea id="ab-wa-message-text" rows="8" style="width: 100%; padding: 12px; background: #0b1329; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 13px; line-height: 1.5; resize: vertical; outline: none; font-family: inherit; direction: rtl;"></textarea>
+                </div>
+              </div>
+
+              <!-- Modal Footer Actions -->
+              <div style="padding: 16px 20px; background: rgba(15, 23, 42, 0.9); border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button type="button" onclick="closeAbandonedWhatsAppModal()" class="btn" style="background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 8px 14px; font-size: 12px; border-radius: 6px;">إلغاء</button>
+                
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" onclick="sendAbandonedBotWhatsApp()" class="btn" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 8px 14px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;" title="إرسال عبر البوت الآلي مستقبلاً">
+                    <span>🤖</span> إرسال آلي (Bot)
+                  </button>
+
+                  <button type="button" onclick="sendAbandonedManualWhatsApp()" class="btn" style="background: #25D366; color: #fff; font-weight: 700; padding: 8px 16px; font-size: 13px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);">
+                    <span>💬</span> إرسال عبر واتساب (يدوي)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -5088,19 +5161,173 @@ IQ,Duhok,,,,8000,</div>
       }
     }
 
-    // ==================== ABANDONED ORDERS RECOVERY ====================
-    var rawAbandonedList = [];
+    // ==================== ABANDONED ORDERS RECOVERY & WHATSAPP ====================
+    window._abandonedCheckouts = [];
     var currentAbandonedFilter = 'all';
+    var currentActiveCheckout = null;
 
-    async function loadAbandonedOrders(showToast) {
+    function formatRelTime(dateIso) {
+      if (!dateIso) return 'Just now';
+      var diffMin = Math.floor((Date.now() - new Date(dateIso).getTime()) / 60000);
+      if (diffMin >= 60 * 24) return Math.floor(diffMin / (60 * 24)) + 'd ago';
+      if (diffMin >= 60) return Math.floor(diffMin / 60) + 'h ago';
+      if (diffMin > 1) return diffMin + 'm ago';
+      return 'Just now';
+    }
+
+    function buildTemplateMessage(tplKey, checkout, options) {
+      options = options || {};
+      var name = (checkout.customer?.name || "عميلنا الكريم").trim();
+      var storeName = ${JSON.stringify(storeDisplayTitle)};
+      var storeSign = "فريق " + storeName + " 🌟";
+      var storeUrl = "https://" + encodeURIComponent('${shop}');
+      var currency = "${currencyDisplay}";
+      var total = Number(checkout.pricing?.total || 0).toLocaleString() + " " + currency;
+      var productNames = (checkout.items || []).map(function(i) { return i.title; }).filter(Boolean).join(" + ") || "الطلب";
+      var eta = "15-30 دقيقة";
+      var code = (options.discountCode || "OFFER10").trim().toUpperCase();
+      var pct = options.discountPct || 10;
+      var lines = [];
+
+      switch (tplKey) {
+        case "abandoned_recovery":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "لاحظنا أنك بدأت طلب في متجر " + storeName + " ولم تتمكن من إكمال الدفع.",
+            "🛒 *المنتج:* " + productNames,
+            "💰 *المبلغ:* " + total,
+            "",
+            "هل واجهتك أي مشكلة أثناء الدفع أو تحتاج مساعدة لإكمال طلبك؟",
+            "يسعدنا الرد على استفسارك ومساعدتك في أي وقت 💬",
+            "",
+            "🔗 رابط المتجر: " + storeUrl,
+            "",
+            storeSign
+          ];
+          break;
+
+        case "abandoned_discount":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "لاحظنا أنك بدأت طلب في متجر " + storeName + " ولم تتمكن من إكمال الدفع.",
+            "🛒 *المنتج:* " + productNames,
+            "💰 *المبلغ:* " + total,
+            "",
+            "ولأنك غالي علينا 🫶🏻",
+            "هذا كود خصم خاص " + pct + "٪ لك وللي يعز عليك:",
+            "الكود هو: *" + code + "*",
+            "أكمل طلبك الآن واستفد من الخصم الحصري.",
+            "",
+            "🔗 رابط المتجر: " + storeUrl,
+            "",
+            "نحن هنا لمساعدتك في أي وقت 💬",
+            storeSign
+          ];
+          break;
+
+        case "confirmation":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "تم تأكيد الدفع والطلب بنجاح في متجر " + storeName + " ✅",
+            "🛒 *المنتج:* " + productNames,
+            "💰 *المبلغ:* " + total,
+            "",
+            "سنبدأ بتجهيز طلبك وإرساله فوراً خلال " + eta + ".",
+            "📘 لمتابعة حالة الطلب: " + storeUrl,
+            "",
+            "شكراً لثقتك بـ " + storeName + " 🌟"
+          ];
+          break;
+
+        case "credentials":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "تم تجهيز طلبك / اشتراكك بنجاح في متجر " + storeName + " ✅",
+            "🛒 *المنتج:* " + productNames,
+            "",
+            "بيانات الطلب / الاشتراك:",
+            "🔑 *الكود / المرجع:* " + (checkout.sessionId || ""),
+            "🔗 *الرابط:* " + storeUrl,
+            "",
+            "إذا كان لديك أي استفسار أو احتجت مساعدة، يسعدنا الرد عليك هنا في أي وقت 💬",
+            storeSign
+          ];
+          break;
+
+        case "delay":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "نعتذر منك — الطلب يحتاج وقتاً إضافياً للتجهيز.",
+            "⏰ الوقت المتوقّع: " + eta,
+            "",
+            "شكراً جزيلاً لصبرك وتفهمك 🙏",
+            storeSign
+          ];
+          break;
+
+        case "follow_up":
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "نتابع معك بخصوص طلبك في " + storeName + ".",
+            "هل كل شيء وصلك ويعمل معك بشكل سليم وممتاز؟",
+            "",
+            "في خدمتك دائماً 💬 — " + storeSign
+          ];
+          break;
+
+        case "review_request":
+          lines = [
+            "مرحباً بك " + name + " 🌟",
+            "",
+            "نتمنى أن تكون تجربتك مع طلب (" + productNames + ") تجربة ممتازة وتليق بتطلعاتك!",
+            "",
+            "رأيك وملاحظاتك تهمنا كثيراً وتساعدنا على تطوير خدماتنا باستمرار.",
+            "يسعدنا مشاركتنا تقييمك عبر الرابط المباشر:",
+            "⭐ " + storeUrl,
+            "",
+            "شكراً لاختيارك " + storeName + "، ونحن في خدمتك دائماً في أي وقت 👋",
+            storeSign
+          ];
+          break;
+
+        case "custom":
+        default:
+          lines = [
+            "السلام عليكم " + name + " 👋",
+            "",
+            "...",
+            "",
+            storeSign
+          ];
+          break;
+      }
+      return lines.join(String.fromCharCode(10));
+    }
+
+    window.loadAbandonedOrders = async function(showToast) {
       var tbody = document.getElementById('ab-orders-tbody');
+      var refreshBtn = document.getElementById('ab-btn-refresh');
+      var refreshSpinner = document.getElementById('ab-refresh-spinner');
+
+      if (refreshBtn) refreshBtn.disabled = true;
+      if (refreshSpinner) refreshSpinner.style.display = 'inline-block';
+      if (tbody && (!window._abandonedCheckouts || window._abandonedCheckouts.length === 0)) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 36px; text-align: center; color: #94a3b8;">⏳ جاري تحميل وتحديث السلات المتروكة...</td></tr>';
+      }
+
       try {
         var res = await fetch('/abandoned/list?shop=' + encodeURIComponent('${shop}'));
         var json = await res.json();
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load data');
+        if (!res.ok || !json.ok) throw new Error(json.error || 'فشل تحميل البيانات');
 
         var stats = json.data?.stats || json.stats || {};
-        rawAbandonedList = json.data?.checkouts || json.checkouts || [];
+        window._abandonedCheckouts = json.data?.checkouts || json.checkouts || [];
 
         var totalEl = document.getElementById('ab-stat-total');
         if (totalEl) totalEl.textContent = stats.totalAbandoned || 0;
@@ -5114,28 +5341,33 @@ IQ,Duhok,,,,8000,</div>
         var contEl = document.getElementById('ab-stat-contacted');
         if (contEl) contEl.textContent = stats.contactedCount || 0;
 
-        renderAbandonedTable();
-        if (showToast && typeof showSuccessToast === 'function') showSuccessToast('Abandoned orders refreshed!');
+        window.renderAbandonedTable();
+        if (showToast) {
+          alert('✅ تم تحديث بيانات السلات المتروكة بنجاح! (' + window._abandonedCheckouts.length + ' سلة)');
+        }
       } catch (err) {
         console.error('Error loading abandoned checkouts:', err);
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="7" style="padding: 36px; text-align: center; color: #ef4444;">Failed to load abandoned checkouts: ' + err.message + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" style="padding: 36px; text-align: center; color: #ef4444;">فشل في تحميل السلات المتروكة: ' + err.message + '</td></tr>';
         }
+      } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+        if (refreshSpinner) refreshSpinner.style.display = 'none';
       }
-    }
+    };
 
-    function setAbandonedFilter(filter, el) {
+    window.setAbandonedFilter = function(filter, el) {
       currentAbandonedFilter = filter;
       document.querySelectorAll('#page-abandoned-orders .btn-period').forEach(function(b) { b.classList.remove('active'); });
       if (el) el.classList.add('active');
-      renderAbandonedTable();
-    }
+      window.renderAbandonedTable();
+    };
 
-    function onFilterAbandoned() {
-      renderAbandonedTable();
-    }
+    window.onFilterAbandoned = function() {
+      window.renderAbandonedTable();
+    };
 
-    function renderAbandonedTable() {
+    window.renderAbandonedTable = function() {
       var tbody = document.getElementById('ab-orders-tbody');
       if (!tbody) return;
 
@@ -5143,7 +5375,7 @@ IQ,Duhok,,,,8000,</div>
       var nowMs = Date.now();
       var todayStr = new Date().toISOString().split('T')[0];
 
-      var filtered = rawAbandonedList.filter(function(item) {
+      var filtered = (window._abandonedCheckouts || []).filter(function(item) {
         if (searchVal) {
           var name = (item.customer?.name || '').toLowerCase();
           var phone = (item.customer?.phone || '').toLowerCase();
@@ -5166,7 +5398,8 @@ IQ,Duhok,,,,8000,</div>
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="padding: 48px 16px; text-align: center; color: #94a3b8;"><div style="font-size: 36px; margin-bottom: 8px;">🎉</div><strong style="color: #fff; font-size: 15px;">No abandoned checkouts found</strong><div style="font-size: 12px; margin-top: 4px;">All checkouts completed or filter returned no matches.</div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 48px 16px; text-align: center; color: #94a3b8;"><div style="font-size: 36px; margin-bottom: 8px;">🎉</div><strong style="color: #fff; font-size: 15px;">No abandoned checkouts found</strong><div style="font-size: 12px; margin-top: 4px;">All checkouts completed or filter returned no matches.</div></td></tr>';
+        updateSelectedCount();
         return;
       }
 
@@ -5175,38 +5408,36 @@ IQ,Duhok,,,,8000,</div>
         var isConverted = item.status === 'converted';
         var isFailed = item.status === 'payment_failed';
         var isContacted = item.contactStatus === 'contacted' || isConverted;
-
-        var relTime = 'Just now';
-        if (item.createdAt) {
-          var diffMin = Math.floor((nowMs - new Date(item.createdAt).getTime()) / 60000);
-          if (diffMin >= 60 * 24) relTime = Math.floor(diffMin / (60 * 24)) + 'd ago';
-          else if (diffMin >= 60) relTime = Math.floor(diffMin / 60) + 'h ago';
-          else if (diffMin > 1) relTime = diffMin + 'm ago';
-        }
+        var relTime = formatRelTime(item.createdAt);
 
         var statusBadge = '';
         if (isConverted) {
-          statusBadge = '<span class="status-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Recovered (#' + (item.convertedOrderNumber || '') + ')</span>';
+          statusBadge = '<span class="status-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Recovered (#' + (item.convertedOrderNumber || '') + ')</span>';
         } else if (isFailed) {
           statusBadge = '<span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Payment Failed</span>';
-        } else if (isContacted) {
-          statusBadge = '<span class="status-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Sent (WhatsApp)</span>';
+        } else if (item.contactStatus === 'contacted') {
+          var methodLabel = item.contactMethod === 'bot' ? '🤖 بوت آلي' : '💬 واتساب';
+          var timeText = item.contactedAt ? ' • ' + formatRelTime(item.contactedAt) : '';
+          statusBadge = '<span class="status-badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14,165,233,0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">تم التواصل (' + methodLabel + timeText + ')</span>';
         } else {
-          statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Not Contacted</span>';
+          statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">لم يتم التواصل</span>';
         }
 
         var itemsList = (item.items || []).map(function(it) {
-          return '<div style="margin-bottom: 2px;"><strong style="color: #e2e8f0;">' + (it.title || '') + '</strong>' +
+          var title = it.title || 'منتج';
+          return '<div style="margin-bottom: 2px;"><strong style="color: #e2e8f0;">' + title + '</strong>' +
             (it.variantTitle ? ' <span style="color: #94a3b8; font-size: 11px;">(' + it.variantTitle + ')</span>' : '') +
             ' <span style="color: #f59e0b; font-weight: 600;">×' + (it.quantity || 1) + '</span></div>';
         }).join('');
+        if (!itemsList) itemsList = '<span style="color: #64748b;">(No items)</span>';
 
         html += '<tr style="border-bottom: 1px solid #1e293b; ' + (isConverted ? 'background: rgba(16, 185, 129, 0.05);' : '') + '">' +
+          '<td style="padding: 14px 16px; text-align: center;"><input type="checkbox" class="ab-row-check" value="' + item.sessionId + '" onchange="onAbandonedRowCheckChange()" style="cursor: pointer; width: 16px; height: 16px; accent-color: #10b981;"></td>' +
           '<td style="padding: 14px 16px; font-family: monospace; font-size: 11px; color: #94a3b8;">' + (item.sessionId || '').slice(-10) + '</td>' +
           '<td style="padding: 14px 16px;">' +
             '<div style="font-weight: 600; color: #fff;">' + (item.customer?.name || 'Customer') + '</div>' +
-            '<div style="color: #38bdf8; font-size: 12px; margin-top: 2px;">' + (item.customer?.phone || '-') + '</div>' +
-            (item.customer?.city ? '<div style="color: #64748b; font-size: 11px;">📍 ' + item.customer.city + '</div>' : '') +
+            '<div style="color: #38bdf8; font-size: 12px; margin-top: 2px; direction: ltr; text-align: left;">' + (item.customer?.phone || '-') + '</div>' +
+            (item.customer?.city ? '<div style="color: #64748b; font-size: 11px;">📍 ' + item.customer.city + (item.customer.address ? ' - ' + item.customer.address : '') + '</div>' : '') +
           '</td>' +
           '<td style="padding: 14px 16px; max-width: 280px;">' + itemsList + '</td>' +
           '<td style="padding: 14px 16px; white-space: nowrap;"><strong style="color: #fff; font-size: 14px;">' + Number(item.pricing?.total || 0).toLocaleString() + '</strong> <span style="color: #94a3b8; font-size: 11px;">${currencyDisplay}</span></td>' +
@@ -5214,42 +5445,218 @@ IQ,Duhok,,,,8000,</div>
           '<td style="padding: 14px 16px; white-space: nowrap;">' + statusBadge + '</td>' +
           '<td style="padding: 14px 16px; white-space: nowrap; text-align: center;">' +
             '<div style="display: flex; gap: 6px; justify-content: center; align-items: center;">' +
-              '<button type="button" onclick=\'openAbandonedWhatsApp(' + JSON.stringify(item).replace(/'/g, "&apos;") + ')\' class="btn" style="background: #25D366; color: #fff; font-weight: 600; padding: 6px 10px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;" title="Send WhatsApp Message"><span>💬</span> WhatsApp</button>' +
-              (!isConverted ? '<button type="button" onclick="convertAbandonedToCod(\'' + item.sessionId + '\', this)" class="btn" style="background: #10b981; color: #fff; padding: 6px 10px; font-size: 12px; border-radius: 6px;" title="Convert to COD Order in Shopify">Convert to COD</button>' : '') +
-              '<button type="button" onclick="deleteAbandoned(\'' + item.sessionId + '\', this)" class="btn" style="background: transparent; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 6px 8px; font-size: 11px; border-radius: 6px;" title="Delete">🗑</button>' +
+              '<button type="button" data-sid="' + item.sessionId + '" onclick="openAbandonedWhatsAppModal(this.dataset.sid)" class="btn" style="background: #25D366; color: #fff; font-weight: 600; padding: 6px 10px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;" title="إرسال واتساب بقوالب جاهزة"><span>💬</span> WhatsApp</button>' +
+              (!isConverted ? '<button type="button" data-sid="' + item.sessionId + '" onclick="convertAbandonedToCod(this.dataset.sid, this)" class="btn" style="background: #10b981; color: #fff; padding: 6px 10px; font-size: 12px; border-radius: 6px;" title="Convert to COD Order in Shopify">Convert to COD</button>' : '') +
+              '<button type="button" data-sid="' + item.sessionId + '" onclick="deleteAbandoned(this.dataset.sid, this)" class="btn" style="background: transparent; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 6px 8px; font-size: 11px; border-radius: 6px;" title="Delete">🗑</button>' +
             '</div>' +
           '</td>' +
         '</tr>';
       });
 
       tbody.innerHTML = html;
+      updateSelectedCount();
+    };
+
+    window.toggleSelectAllAbandoned = function(masterCb) {
+      var isChecked = masterCb.checked;
+      document.querySelectorAll('.ab-row-check').forEach(function(cb) {
+        cb.checked = isChecked;
+      });
+      updateSelectedCount();
+    };
+
+    window.onAbandonedRowCheckChange = function() {
+      updateSelectedCount();
+    };
+
+    function updateSelectedCount() {
+      var checked = document.querySelectorAll('.ab-row-check:checked');
+      var count = checked.length;
+      var countSpan = document.getElementById('ab-selected-count');
+      var bulkBtn = document.getElementById('ab-btn-bulk-delete');
+      var masterCb = document.getElementById('ab-select-all');
+
+      if (countSpan) countSpan.textContent = count;
+      if (bulkBtn) {
+        bulkBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+      }
+
+      var allRows = document.querySelectorAll('.ab-row-check');
+      if (masterCb && allRows.length > 0) {
+        masterCb.checked = (checked.length === allRows.length);
+      }
     }
 
-    function openAbandonedWhatsApp(checkout) {
-      var rawPhone = checkout.customer?.phone || '';
-      var cleanPhone = rawPhone.replace(/[^\d+]/g, '').replace(/^\+/, '');
-      if (!cleanPhone) {
-        alert('No valid phone number for customer.');
+    window.deleteSelectedAbandoned = async function() {
+      var checkedBoxes = document.querySelectorAll('.ab-row-check:checked');
+      var ids = Array.from(checkedBoxes).map(function(cb) { return cb.value; });
+      if (ids.length === 0) return;
+
+      if (!confirm('هل أنت متأكد من حذف ' + ids.length + ' من السلات المتروكة المحددة نهائياً؟')) return;
+
+      var bulkBtn = document.getElementById('ab-btn-bulk-delete');
+      if (bulkBtn) { bulkBtn.disabled = true; bulkBtn.textContent = 'جاري الحذف...'; }
+
+      try {
+        var res = await fetch('/abandoned/delete?shop=' + encodeURIComponent('${shop}'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionIds: ids })
+        });
+        var json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'فشل الحذف الجماعي');
+
+        alert('✅ تم حذف ' + (json.deletedCount || ids.length) + ' سلة متروكة بنجاح');
+        window.loadAbandonedOrders(false);
+      } catch (err) {
+        alert('خطأ: ' + err.message);
+      } finally {
+        if (bulkBtn) { bulkBtn.disabled = false; }
+        updateSelectedCount();
+      }
+    };
+
+    window.openAbandonedWhatsAppModal = function(sessionId) {
+      var checkout = (window._abandonedCheckouts || []).find(function(c) { return c.sessionId === sessionId; });
+      if (!checkout) {
+        alert('بيانات السلة غير متوفرة.');
         return;
       }
-      var custName = checkout.customer?.name || 'عزيزنا العميل';
-      var productNames = (checkout.items || []).map(function(i) { return i.title; }).join(' + ') || 'طلبك';
-      var totalAmount = (checkout.pricing?.total || 0) + ' ' + ('${currencyDisplay}');
-      var text = 'مرحباً ' + custName + '، لاحظنا أنك بدأت طلب (' + productNames + ') بقيمة ' + totalAmount + ' في متجرنا ولم تكتمل عملية الدفع الإلكتروني. هل ترغب في تأكيد شحن الطلب لك بنظام الدفع عند الاستلام (COD) مع توصيل سريع لعنوانك؟';
-      var waUrl = 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(text);
+      currentActiveCheckout = checkout;
+
+      var custName = checkout.customer?.name || 'العميل';
+      var phone = checkout.customer?.phone || 'بدون رقم';
+      var titleEl = document.getElementById('ab-wa-modal-title');
+      var subEl = document.getElementById('ab-wa-modal-sub');
+      if (titleEl) titleEl.textContent = 'التواصل عبر واتساب — ' + custName;
+      if (subEl) subEl.textContent = 'رقم الهاتف: ' + phone + ' | السلة: ' + (sessionId.slice(-10));
+
+      var tplSelect = document.getElementById('ab-wa-template-select');
+      if (tplSelect) tplSelect.value = 'abandoned_recovery';
+
+      var discountWrap = document.getElementById('ab-wa-discount-wrap');
+      if (discountWrap) discountWrap.style.display = 'none';
+
+      window.onAbandonedTemplateChange();
+
+      var modal = document.getElementById('ab-wa-modal');
+      if (modal) modal.style.display = 'flex';
+    };
+
+    window.closeAbandonedWhatsAppModal = function() {
+      var modal = document.getElementById('ab-wa-modal');
+      if (modal) modal.style.display = 'none';
+      currentActiveCheckout = null;
+    };
+
+    window.onAbandonedTemplateChange = function() {
+      if (!currentActiveCheckout) return;
+      var tpl = document.getElementById('ab-wa-template-select')?.value || 'abandoned_recovery';
+      var discountWrap = document.getElementById('ab-wa-discount-wrap');
+      var isDiscount = (tpl === 'abandoned_discount');
+      if (discountWrap) {
+        discountWrap.style.display = isDiscount ? 'grid' : 'none';
+      }
+
+      var discountCode = document.getElementById('ab-wa-discount-code')?.value || 'OFFER10';
+      var discountPct = Number(document.getElementById('ab-wa-discount-pct')?.value || 10);
+
+      var msg = buildTemplateMessage(tpl, currentActiveCheckout, {
+        discountCode: discountCode,
+        discountPct: discountPct
+      });
+
+      var textarea = document.getElementById('ab-wa-message-text');
+      if (textarea) {
+        textarea.value = msg;
+        var countEl = document.getElementById('ab-wa-char-count');
+        if (countEl) countEl.textContent = msg.length + ' حرف';
+      }
+    };
+
+    window.sendAbandonedManualWhatsApp = async function() {
+      if (!currentActiveCheckout) return;
+      var rawPhone = currentActiveCheckout.customer?.phone || '';
+      var cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      if (cleanPhone.indexOf('00') === 0) cleanPhone = cleanPhone.slice(2);
+      if (!cleanPhone) {
+        alert('لا يوجد رقم هاتف صالح لهذا العميل.');
+        return;
+      }
+
+      var message = document.getElementById('ab-wa-message-text')?.value || '';
+      var tpl = document.getElementById('ab-wa-template-select')?.value || 'abandoned_recovery';
+
+      var waUrl = 'https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(message);
       window.open(waUrl, '_blank');
 
-      fetch('/abandoned/status?shop=' + encodeURIComponent('${shop}'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: checkout.sessionId, contactStatus: 'contacted' })
-      }).then(function() {
-        checkout.contactStatus = 'contacted';
-        renderAbandonedTable();
-      }).catch(function(e) { console.warn(e); });
-    }
+      try {
+        var res = await fetch('/abandoned/status?shop=' + encodeURIComponent('${shop}'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: currentActiveCheckout.sessionId,
+            contactStatus: 'contacted',
+            contactMethod: 'whatsapp_manual',
+            template: tpl
+          })
+        });
+        var json = await res.json();
+        if (json.ok) {
+          currentActiveCheckout.contactStatus = 'contacted';
+          currentActiveCheckout.contactMethod = 'whatsapp_manual';
+          currentActiveCheckout.contactedAt = json.contactedAt || new Date().toISOString();
+          currentActiveCheckout.templateUsed = tpl;
+          window.renderAbandonedTable();
+        }
+      } catch (e) {
+        console.warn('Status update error:', e);
+      }
 
-    async function convertAbandonedToCod(sessionId, btn) {
+      window.closeAbandonedWhatsAppModal();
+    };
+
+    window.sendAbandonedBotWhatsApp = async function() {
+      if (!currentActiveCheckout) return;
+      var rawPhone = currentActiveCheckout.customer?.phone || '';
+      var cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      if (cleanPhone.indexOf('00') === 0) cleanPhone = cleanPhone.slice(2);
+      if (!cleanPhone) {
+        alert('لا يوجد رقم هاتف صالح لهذا العميل.');
+        return;
+      }
+
+      var tpl = document.getElementById('ab-wa-template-select')?.value || 'abandoned_recovery';
+      if (!confirm('تأكيد الإرسال الآلي عبر البوت للرقم: ' + cleanPhone + '؟\\nسيتم إدراج الرسالة في طابور الإرسال الآلي وتحديث حالة الطلب.')) return;
+
+      try {
+        var res = await fetch('/abandoned/status?shop=' + encodeURIComponent('${shop}'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: currentActiveCheckout.sessionId,
+            contactStatus: 'contacted',
+            contactMethod: 'bot',
+            template: tpl
+          })
+        });
+        var json = await res.json();
+        if (json.ok) {
+          currentActiveCheckout.contactStatus = 'contacted';
+          currentActiveCheckout.contactMethod = 'bot';
+          currentActiveCheckout.contactedAt = json.contactedAt || new Date().toISOString();
+          currentActiveCheckout.templateUsed = tpl;
+          window.renderAbandonedTable();
+          alert('🤖 تم إرسال أمر الإرسال الآلي للبوت بنجاح، وتم تحديث حالة العميل إلى [تم التواصل - بوت آلي]!');
+        }
+      } catch (e) {
+        alert('خطأ: ' + e.message);
+      }
+
+      window.closeAbandonedWhatsAppModal();
+    };
+
+    window.convertAbandonedToCod = async function(sessionId, btn) {
       if (!confirm('Are you sure you want to convert this abandoned checkout into an active COD order in Shopify?')) return;
       if (btn) { btn.disabled = true; btn.textContent = 'Converting...'; }
       try {
@@ -5260,15 +5667,15 @@ IQ,Duhok,,,,8000,</div>
         });
         var json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || 'Conversion failed');
-        alert('Order created successfully in Shopify! Order #' + (json.orderNumber || json.data?.orderNumber || ''));
-        loadAbandonedOrders(false);
+        alert('✅ Order created successfully in Shopify! Order #' + (json.orderNumber || json.data?.orderNumber || ''));
+        window.loadAbandonedOrders(false);
       } catch (err) {
         alert('Error: ' + err.message);
         if (btn) { btn.disabled = false; btn.textContent = 'Convert to COD'; }
       }
-    }
+    };
 
-    async function deleteAbandoned(sessionId, btn) {
+    window.deleteAbandoned = async function(sessionId, btn) {
       if (!confirm('Are you sure you want to delete this abandoned checkout?')) return;
       if (btn) { btn.disabled = true; }
       try {
@@ -5279,14 +5686,14 @@ IQ,Duhok,,,,8000,</div>
         });
         var json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || 'Delete failed');
-        loadAbandonedOrders(false);
+        window.loadAbandonedOrders(false);
       } catch (err) {
         alert('Error: ' + err.message);
         if (btn) { btn.disabled = false; }
       }
-    }
+    };
 
-    async function cleanupAbandoned24h(btn) {
+    window.cleanupAbandoned24h = async function(btn) {
       if (!confirm('Clean up and delete all abandoned checkouts older than 24 hours?')) return;
       if (btn) { btn.disabled = true; btn.textContent = 'Cleaning...'; }
       try {
@@ -5298,16 +5705,16 @@ IQ,Duhok,,,,8000,</div>
         var json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || 'Cleanup failed');
         alert('Cleaned ' + (json.deletedCount || json.data?.deletedCount || 0) + ' old abandoned checkouts');
-        loadAbandonedOrders(false);
+        window.loadAbandonedOrders(false);
       } catch (err) {
         alert('Error: ' + err.message);
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = '🧹 Clean Older Than 24h'; }
       }
-    }
+    };
 
     if ('${initialPage}' === 'abandoned-orders') {
-      loadAbandonedOrders();
+      window.loadAbandonedOrders();
     }
 
     if (document.readyState === 'loading') {

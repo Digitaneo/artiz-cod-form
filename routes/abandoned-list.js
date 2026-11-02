@@ -72,6 +72,9 @@ export async function abandonedListRoute(request, env) {
           sessionId: item.sessionId,
           status: item.status || "pending_payment",
           contactStatus: item.contactStatus || "not_contacted",
+          contactedAt: item.contactedAt || null,
+          contactMethod: item.contactMethod || null,
+          templateUsed: item.templateUsed || null,
           customer: item.customer || {},
           items: item.items || [],
           pricing: item.pricing || { total: itemTotal, currency },
@@ -102,3 +105,4 @@ export async function abandonedListRoute(request, env) {
     return errorResponse(err.message || "Failed to list abandoned checkouts", "ABANDONED_LIST_FAILED", 500);
   }
 }
+

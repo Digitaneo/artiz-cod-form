@@ -22,13 +22,25 @@ export async function abandonedDeleteRoute(request, env) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { sessionId, olderThanHours } = body;
+    const { sessionId, sessionIds, olderThanHours } = body;
 
     if (!env.SHOPIFY_CONFIG) {
       return errorResponse("Storage unavailable", "STORAGE_ERROR", 500);
     }
 
-    // 1. Delete single checkout
+    // 1. Delete multiple selected checkouts (Bulk Delete)
+    if (Array.isArray(sessionIds) && sessionIds.length > 0) {
+      let deletedCount = 0;
+      for (const sid of sessionIds) {
+        if (sid && typeof sid === "string") {
+          await env.SHOPIFY_CONFIG.delete(`abandoned:${shop}:${sid}`);
+          deletedCount++;
+        }
+      }
+      return successResponse({ ok: true, deletedCount, sessionIds }, 200);
+    }
+
+    // 2. Delete single checkout
     if (sessionId) {
       await env.SHOPIFY_CONFIG.delete(`abandoned:${shop}:${sessionId}`);
       return successResponse({ ok: true, deletedSessionId: sessionId }, 200);
@@ -63,3 +75,4 @@ export async function abandonedDeleteRoute(request, env) {
     return errorResponse(err.message || "Failed to delete abandoned checkout", "DELETE_FAILED", 500);
   }
 }
+

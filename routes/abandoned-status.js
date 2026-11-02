@@ -42,12 +42,23 @@ export async function abandonedStatusRoute(request, env) {
     const sessionData = JSON.parse(rawRecord);
     sessionData.contactStatus = contactStatus;
     sessionData.contactedAt = new Date().toISOString();
+    sessionData.contactMethod = body.contactMethod || "whatsapp_manual";
+    if (body.template) {
+      sessionData.templateUsed = body.template;
+    }
     sessionData.updatedAt = new Date().toISOString();
 
     await env.SHOPIFY_CONFIG.put(abandonedKey, JSON.stringify(sessionData), { expirationTtl: 604800 });
 
-    return successResponse({ ok: true, contactStatus }, 200);
+    return successResponse({ 
+      ok: true, 
+      contactStatus, 
+      contactedAt: sessionData.contactedAt,
+      contactMethod: sessionData.contactMethod,
+      templateUsed: sessionData.templateUsed
+    }, 200);
   } catch (err) {
     return errorResponse(err.message || "Failed to update status", "STATUS_UPDATE_FAILED", 500);
   }
 }
+
