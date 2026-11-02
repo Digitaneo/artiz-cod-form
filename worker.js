@@ -26,6 +26,7 @@ import { abandonedListRoute } from "./routes/abandoned-list.js";
 import { abandonedConvertRoute } from "./routes/abandoned-convert.js";
 import { abandonedStatusRoute } from "./routes/abandoned-status.js";
 import { abandonedDeleteRoute } from "./routes/abandoned-delete.js";
+import { publicValidateCouponRoute } from "./routes/public-validate-coupon.js";
 
 import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -159,16 +160,21 @@ export default {
           response = await abandonedDeleteRoute(request, env);
           break;
 
+        case ROUTE_PATHNAMES.PUBLIC_VALIDATE_COUPON:
+          response = await publicValidateCouponRoute(request, env);
+          break;
+
         case "/":
         case "":
         case "/overview":
+        case "/abandoned-orders":
+        case "/abandoned-checkouts":
         case "/form-builder":
         case "/shipping":
         case "/payment-methods":
         case "/fraud-prevention":
         case "/sales-booster":
         case "/integrations":
-        case "/abandoned-checkouts":
           response = await dashboardEmbeddedRoute(request, env);
           break;
 

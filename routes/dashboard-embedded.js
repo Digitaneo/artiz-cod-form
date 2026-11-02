@@ -887,6 +887,7 @@ export async function dashboardEmbeddedRoute(request, env) {
   };
   const currencyDisplay = currencySymbolMap[shopCurrency] || shopCurrency;
   const storeDisplayTitle = (shop === "iuq7xa-0g.myshopify.com") ? "Aladdin Fitness" : shop;
+  const storeDisplayDomain = (shop === "iuq7xa-0g.myshopify.com") ? "https://aladdinfitness.com" : `https://${shop}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -2796,7 +2797,7 @@ export async function dashboardEmbeddedRoute(request, env) {
                 <div style="display: flex; align-items: center; gap: 10px;">
                   <span style="font-size: 22px;">💬</span>
                   <div>
-                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;" id="ab-wa-modal-title">التواصل عبر واتساب</h3>
+                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;" id="ab-wa-modal-title">WhatsApp Follow-Up</h3>
                     <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;" id="ab-wa-modal-sub">...</div>
                   </div>
                 </div>
@@ -2806,27 +2807,27 @@ export async function dashboardEmbeddedRoute(request, env) {
               <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
                 <!-- Template Selector -->
                 <div>
-                  <label style="display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">اختيار القالب الجاهز:</label>
+                  <label style="display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Select Message Template:</label>
                   <select id="ab-wa-template-select" onchange="onAbandonedTemplateChange()" style="width: 100%; padding: 10px 12px; background: #0b1329; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 13px; outline: none;">
-                    <option value="abandoned_recovery">🛒 استعادة السلة (مساعدة)</option>
-                    <option value="abandoned_discount">🎁 استعادة السلة (عرض خصم)</option>
-                    <option value="confirmation">✅ تأكيد الدفع</option>
-                    <option value="credentials">🔑 تسليم الاشتراك / الطلب</option>
-                    <option value="delay">⏳ إشعار تأخير</option>
-                    <option value="follow_up">💬 متابعة الطلب</option>
-                    <option value="review_request">⭐ طلب تقييم الخدمة</option>
-                    <option value="custom">✏️ رسالة مخصّصة</option>
+                    <option value="abandoned_recovery">🛒 Abandoned Cart Recovery (Help)</option>
+                    <option value="abandoned_discount">🎁 Abandoned Cart Offer (Discount)</option>
+                    <option value="confirmation">✅ Payment Confirmation</option>
+                    <option value="credentials">🔑 Order / Subscription Delivery</option>
+                    <option value="delay">⏳ Order Delay Notice</option>
+                    <option value="follow_up">💬 Order Follow-Up</option>
+                    <option value="review_request">⭐ Service Review Request</option>
+                    <option value="custom">✏️ Custom Message</option>
                   </select>
                 </div>
 
                 <!-- Discount Options (Conditional) -->
                 <div id="ab-wa-discount-wrap" style="display: none; grid-template-columns: 1fr 1fr; gap: 10px; background: rgba(30, 41, 59, 0.5); padding: 12px; border-radius: 8px; border: 1px solid #334155;">
                   <div>
-                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">كود الخصم:</label>
+                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Discount Code:</label>
                     <input type="text" id="ab-wa-discount-code" value="OFFER10" oninput="onAbandonedTemplateChange()" style="width: 100%; padding: 6px 10px; background: #0b1329; border: 1px solid #475569; border-radius: 6px; color: #f59e0b; font-weight: 700; font-size: 12px;">
                   </div>
                   <div>
-                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">نسبة الخصم (%):</label>
+                    <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Discount (%):</label>
                     <input type="number" id="ab-wa-discount-pct" value="10" min="1" max="100" oninput="onAbandonedTemplateChange()" style="width: 100%; padding: 6px 10px; background: #0b1329; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 12px;">
                   </div>
                 </div>
@@ -2834,8 +2835,8 @@ export async function dashboardEmbeddedRoute(request, env) {
                 <!-- Message Textarea Preview -->
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <label style="font-size: 12px; font-weight: 600; color: #94a3b8;">نص الرسالة (يمكنك تعديلها قبل الإرسال):</label>
-                    <span style="font-size: 11px; color: #64748b;" id="ab-wa-char-count">0 حرف</span>
+                    <label style="font-size: 12px; font-weight: 600; color: #94a3b8;">Message Preview (Editable before sending):</label>
+                    <span style="font-size: 11px; color: #64748b;" id="ab-wa-char-count">0 characters</span>
                   </div>
                   <textarea id="ab-wa-message-text" rows="8" style="width: 100%; padding: 12px; background: #0b1329; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 13px; line-height: 1.5; resize: vertical; outline: none; font-family: inherit; direction: rtl;"></textarea>
                 </div>
@@ -2843,15 +2844,15 @@ export async function dashboardEmbeddedRoute(request, env) {
 
               <!-- Modal Footer Actions -->
               <div style="padding: 16px 20px; background: rgba(15, 23, 42, 0.9); border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <button type="button" onclick="closeAbandonedWhatsAppModal()" class="btn" style="background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 8px 14px; font-size: 12px; border-radius: 6px;">إلغاء</button>
+                <button type="button" onclick="closeAbandonedWhatsAppModal()" class="btn" style="background: transparent; color: #94a3b8; border: 1px solid #334155; padding: 8px 14px; font-size: 12px; border-radius: 6px;">Cancel</button>
                 
                 <div style="display: flex; gap: 8px;">
-                  <button type="button" onclick="sendAbandonedBotWhatsApp()" class="btn" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 8px 14px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;" title="إرسال عبر البوت الآلي مستقبلاً">
-                    <span>🤖</span> إرسال آلي (Bot)
+                  <button type="button" onclick="sendAbandonedBotWhatsApp()" class="btn" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 8px 14px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;" title="Send via Automated Bot">
+                    <span>🤖</span> Send via Bot
                   </button>
 
                   <button type="button" onclick="sendAbandonedManualWhatsApp()" class="btn" style="background: #25D366; color: #fff; font-weight: 700; padding: 8px 16px; font-size: 13px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);">
-                    <span>💬</span> إرسال عبر واتساب (يدوي)
+                    <span>💬</span> Send via WhatsApp (Manual)
                   </button>
                 </div>
               </div>
@@ -5180,7 +5181,7 @@ IQ,Duhok,,,,8000,</div>
       var name = (checkout.customer?.name || "عميلنا الكريم").trim();
       var storeName = ${JSON.stringify(storeDisplayTitle)};
       var storeSign = "فريق " + storeName + " 🌟";
-      var storeUrl = "https://" + encodeURIComponent('${shop}');
+      var storeUrl = ${JSON.stringify(storeDisplayDomain)};
       var currency = "${currencyDisplay}";
       var total = Number(checkout.pricing?.total || 0).toLocaleString() + " " + currency;
       var productNames = (checkout.items || []).map(function(i) { return i.title; }).filter(Boolean).join(" + ") || "الطلب";
@@ -5342,9 +5343,6 @@ IQ,Duhok,,,,8000,</div>
         if (contEl) contEl.textContent = stats.contactedCount || 0;
 
         window.renderAbandonedTable();
-        if (showToast) {
-          alert('✅ تم تحديث بيانات السلات المتروكة بنجاح! (' + window._abandonedCheckouts.length + ' سلة)');
-        }
       } catch (err) {
         console.error('Error loading abandoned checkouts:', err);
         if (tbody) {
@@ -5416,11 +5414,11 @@ IQ,Duhok,,,,8000,</div>
         } else if (isFailed) {
           statusBadge = '<span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Payment Failed</span>';
         } else if (item.contactStatus === 'contacted') {
-          var methodLabel = item.contactMethod === 'bot' ? '🤖 بوت آلي' : '💬 واتساب';
+          var methodLabel = item.contactMethod === 'bot' ? '🤖 Bot' : '💬 WhatsApp';
           var timeText = item.contactedAt ? ' • ' + formatRelTime(item.contactedAt) : '';
-          statusBadge = '<span class="status-badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14,165,233,0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">تم التواصل (' + methodLabel + timeText + ')</span>';
+          statusBadge = '<span class="status-badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14,165,233,0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Contacted (' + methodLabel + timeText + ')</span>';
         } else {
-          statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">لم يتم التواصل</span>';
+          statusBadge = '<span class="status-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px;">Not Contacted</span>';
         }
 
         var itemsList = (item.items || []).map(function(it) {
@@ -5528,8 +5526,8 @@ IQ,Duhok,,,,8000,</div>
       var phone = checkout.customer?.phone || 'بدون رقم';
       var titleEl = document.getElementById('ab-wa-modal-title');
       var subEl = document.getElementById('ab-wa-modal-sub');
-      if (titleEl) titleEl.textContent = 'التواصل عبر واتساب — ' + custName;
-      if (subEl) subEl.textContent = 'رقم الهاتف: ' + phone + ' | السلة: ' + (sessionId.slice(-10));
+      if (titleEl) titleEl.textContent = 'WhatsApp Follow-Up — ' + custName;
+      if (subEl) subEl.textContent = 'Phone: ' + phone + ' | Cart ID: ' + (sessionId.slice(-10));
 
       var tplSelect = document.getElementById('ab-wa-template-select');
       if (tplSelect) tplSelect.value = 'abandoned_recovery';
@@ -5570,7 +5568,7 @@ IQ,Duhok,,,,8000,</div>
       if (textarea) {
         textarea.value = msg;
         var countEl = document.getElementById('ab-wa-char-count');
-        if (countEl) countEl.textContent = msg.length + ' حرف';
+        if (countEl) countEl.textContent = msg.length + ' characters';
       }
     };
 

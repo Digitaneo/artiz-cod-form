@@ -13,12 +13,18 @@ export const PERMISSIONS = {
     "/public/order-details",
     "/public/form-config",
     "/public/shipping/calculate",
+    "/public/validate-coupon",
     "/health",
     "/install",
     "/callback",
     "/docs/openapi.json",
     "/webhooks/wayl",
-    "/dashboard/weekly-sales"
+    "/dashboard/weekly-sales",
+    "/abandoned-orders",
+    "/abandoned/list",
+    "/abandoned/convert",
+    "/abandoned/status",
+    "/abandoned/delete"
   ],
   ADMIN_ROUTES: [
     "/dashboard/summary",
