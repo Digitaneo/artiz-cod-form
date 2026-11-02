@@ -72,7 +72,7 @@ export class PaymentManagerService {
       try {
         const rawAlt = await this.env.SHOPIFY_CONFIG.get(`payment_methods:${shop}`);
         if (rawAlt) customMethods = JSON.parse(rawAlt);
-      } catch (_) { }
+      } catch (_) {}
     }
 
     if (!customMethods) {
@@ -201,6 +201,38 @@ export class PaymentManagerService {
       await this.env.SHOPIFY_CONFIG.put(
         `payment_session:${sessionId}`,
         JSON.stringify(sessionRecord),
+        { expirationTtl: 604800 }
+      );
+
+      // Index for Abandoned Checkout recovery per store (Multi-store isolation)
+      const abandonedRecord = {
+        sessionId,
+        shop,
+        status: "pending_payment",
+        contactStatus: "not_contacted", // "not_contacted" | "contacted" | "converted"
+        customer: {
+          name: customer.name || "",
+          phone: customer.phone || "",
+          city: customer.city || "",
+          address: customer.address || "",
+          country: customer.country || ""
+        },
+        items: items.map(i => ({
+          title: i.title || "",
+          variantTitle: i.variantTitle || "",
+          quantity: i.quantity || 1,
+          price: i.price || 0,
+          image: i.image || ""
+        })),
+        pricing: sessionRecord.pricing,
+        paymentMethod,
+        shippingTitle: sessionRecord.shipping_title,
+        createdAt: sessionRecord.created_at,
+        updatedAt: sessionRecord.created_at
+      };
+      await this.env.SHOPIFY_CONFIG.put(
+        `abandoned:${shop}:${sessionId}`,
+        JSON.stringify(abandonedRecord),
         { expirationTtl: 604800 }
       );
     }

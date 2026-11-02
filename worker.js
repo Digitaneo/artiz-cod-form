@@ -1,4 +1,4 @@
-// Artiz COD Form - Cloudflare Worker Engine
+// Aladdin Quick Order - Dedicated Cloudflare Worker Engine (Production v1.0.1)
 // Automated Build Verification
 import { publicCheckoutRoute } from "./routes/public-checkout.js";
 import { publicOrderDetailsRoute } from "./routes/public-order-details.js";
@@ -20,6 +20,12 @@ import { shippingImportCsvRoute } from "./routes/shipping-import-csv.js";
 import { shippingImportShopifyRoute } from "./routes/shipping-import-shopify.js";
 import { publicShippingCalculateRoute } from "./routes/public-shipping-calculate.js";
 import { webhooksWaylRoute } from "./routes/webhooks-wayl.js";
+import { dashboardEmbeddedRoute } from "./routes/dashboard-embedded.js";
+import { dashboardWeeklySalesRoute } from "./routes/dashboard-weekly-sales.js";
+import { abandonedListRoute } from "./routes/abandoned-list.js";
+import { abandonedConvertRoute } from "./routes/abandoned-convert.js";
+import { abandonedStatusRoute } from "./routes/abandoned-status.js";
+import { abandonedDeleteRoute } from "./routes/abandoned-delete.js";
 
 import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -131,6 +137,47 @@ export default {
 
         case ROUTE_PATHNAMES.WEBHOOK_WAYL:
           response = await webhooksWaylRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.DASHBOARD_WEEKLY_SALES:
+          response = await dashboardWeeklySalesRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.ABANDONED_LIST:
+          response = await abandonedListRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.ABANDONED_CONVERT:
+          response = await abandonedConvertRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.ABANDONED_STATUS:
+          response = await abandonedStatusRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.ABANDONED_DELETE:
+          response = await abandonedDeleteRoute(request, env);
+          break;
+
+        case "/":
+        case "":
+        case "/overview":
+        case "/form-builder":
+        case "/shipping":
+        case "/payment-methods":
+        case "/fraud-prevention":
+        case "/sales-booster":
+        case "/integrations":
+        case "/abandoned-checkouts":
+          response = await dashboardEmbeddedRoute(request, env);
+          break;
+
+        case "/settings":
+          if (request.headers.get("authorization") || request.headers.get("accept")?.includes("application/json")) {
+            response = await settingsGetRoute(request, env);
+          } else {
+            response = await dashboardEmbeddedRoute(request, env);
+          }
           break;
 
         default:

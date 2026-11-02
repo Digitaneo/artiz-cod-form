@@ -1,8 +1,7 @@
 // Route: /webhooks/wayl
-// Handles asynchronous webhook callbacks from Wayl payment gateway
+// Handles asynchronous webhook callbacks from Wayl payment gateway via Cloudflare KV
 
 import { WaylGateway } from "../services/payment/gateways/wayl.gateway.js";
-import { SupabaseService } from "../services/supabase.service.js";
 import { OrderService } from "../services/order.service.js";
 import { successResponse, errorResponse } from "../middleware/response.js";
 
@@ -35,25 +34,32 @@ export async function webhooksWaylRoute(request, env) {
     return errorResponse("Missing referenceId in webhook payload", "MISSING_REFERENCE_ID", 400);
   }
 
-  const supabaseService = new SupabaseService(env);
-  let session = await supabaseService.getPaymentSession(referenceId);
+  // Retrieve session directly from Cloudflare KV
+  let session = null;
+  let sessionKey = `payment_session:${referenceId}`;
 
-  // If not found in Supabase, check KV fallback
-  if (!session && env.SHOPIFY_CONFIG) {
-    try {
-      const list = await env.SHOPIFY_CONFIG.list({ prefix: "payment_session:" });
-      for (const k of list.keys) {
-        if (k.name.endsWith(referenceId)) {
-          const raw = await env.SHOPIFY_CONFIG.get(k.name);
-          if (raw) session = JSON.parse(raw);
-          break;
-        }
+  if (env.SHOPIFY_CONFIG) {
+    // 1. Direct session key
+    let rawSession = await env.SHOPIFY_CONFIG.get(sessionKey);
+    
+    // 2. Secondary index lookup via payment_ref:
+    if (!rawSession) {
+      const mappedSessionId = await env.SHOPIFY_CONFIG.get(`payment_ref:${referenceId}`);
+      if (mappedSessionId) {
+        sessionKey = `payment_session:${mappedSessionId}`;
+        rawSession = await env.SHOPIFY_CONFIG.get(sessionKey);
       }
-    } catch (_) {}
+    }
+
+    if (rawSession) {
+      try {
+        session = JSON.parse(rawSession);
+      } catch (_) {}
+    }
   }
 
   if (!session) {
-    console.warn(`Wayl Webhook: Session not found for referenceId: ${referenceId}`);
+    console.warn(`Wayl Webhook: Session not found in KV for referenceId: ${referenceId}`);
     return errorResponse("Payment session not found", "SESSION_NOT_FOUND", 404);
   }
 
@@ -71,11 +77,27 @@ export async function webhooksWaylRoute(request, env) {
   const isPaid = eventStatus === "PAID" || eventStatus === "SUCCESS" || eventStatus === "COMPLETED";
 
   if (!isPaid) {
-    await supabaseService.updatePaymentSession(referenceId, {
-      status: "failed",
-      webhook_payload: eventData,
-      error_message: `Payment status received: ${eventStatus}`
-    });
+    session.status = "failed";
+    session.error_message = `Payment status received: ${eventStatus}`;
+    session.webhook_payload = eventData;
+    session.updated_at = new Date().toISOString();
+
+    if (env.SHOPIFY_CONFIG) {
+      await env.SHOPIFY_CONFIG.put(sessionKey, JSON.stringify(session), { expirationTtl: 604800 });
+      // Mark as payment_failed in abandoned list so merchant can follow up via WhatsApp
+      const abandonedKey = `abandoned:${shop}:${session.client_session_id || referenceId}`;
+      const existingRaw = await env.SHOPIFY_CONFIG.get(abandonedKey);
+      if (existingRaw) {
+        try {
+          const rec = JSON.parse(existingRaw);
+          rec.status = "payment_failed";
+          rec.failedReason = session.error_message;
+          rec.updatedAt = new Date().toISOString();
+          await env.SHOPIFY_CONFIG.put(abandonedKey, JSON.stringify(rec), { expirationTtl: 604800 });
+        } catch (_) {}
+      }
+    }
+
     return successResponse({ received: true, status: eventStatus }, 200);
   }
 
@@ -110,21 +132,18 @@ export async function webhooksWaylRoute(request, env) {
       }
     );
 
-    // Update Supabase session to 'paid' with Shopify order details
-    await supabaseService.updatePaymentSession(referenceId, {
-      status: "paid",
-      shopify_order_id: createdOrder.orderId,
-      shopify_order_number: createdOrder.orderNumber,
-      webhook_payload: eventData
-    });
+    // Update session in Cloudflare KV to 'paid' with Shopify order details
+    session.status = "paid";
+    session.shopify_order_id = createdOrder.orderId;
+    session.shopify_order_number = createdOrder.orderNumber;
+    session.paid_at = new Date().toISOString();
+    session.webhook_payload = eventData;
 
-    // Also update KV fallback if used
     if (env.SHOPIFY_CONFIG) {
-      const kvKey = `payment_session:${shop}:${referenceId}`;
-      session.status = "paid";
-      session.shopify_order_id = createdOrder.orderId;
-      session.shopify_order_number = createdOrder.orderNumber;
-      await env.SHOPIFY_CONFIG.put(kvKey, JSON.stringify(session));
+      await env.SHOPIFY_CONFIG.put(sessionKey, JSON.stringify(session), { expirationTtl: 604800 });
+      // Delete from abandoned checkouts list because order is now paid!
+      const abandonedKey = `abandoned:${shop}:${session.client_session_id || referenceId}`;
+      await env.SHOPIFY_CONFIG.delete(abandonedKey);
     }
 
     return successResponse({
@@ -135,10 +154,27 @@ export async function webhooksWaylRoute(request, env) {
     }, 200);
   } catch (err) {
     console.error("Failed to create paid order in Shopify on Wayl webhook:", err);
-    await supabaseService.updatePaymentSession(referenceId, {
-      error_message: err.message,
-      webhook_payload: eventData
-    });
+    session.error_message = err.message;
+    session.webhook_payload = eventData;
+    session.updated_at = new Date().toISOString();
+
+    if (env.SHOPIFY_CONFIG) {
+      await env.SHOPIFY_CONFIG.put(sessionKey, JSON.stringify(session), { expirationTtl: 604800 });
+      // Mark as payment_failed in abandoned list so merchant can follow up via WhatsApp
+      const abandonedKey = `abandoned:${shop}:${session.client_session_id || referenceId}`;
+      const existingRaw = await env.SHOPIFY_CONFIG.get(abandonedKey);
+      if (existingRaw) {
+        try {
+          const rec = JSON.parse(existingRaw);
+          rec.status = "payment_failed";
+          rec.failedReason = session.error_message;
+          rec.updatedAt = new Date().toISOString();
+          await env.SHOPIFY_CONFIG.put(abandonedKey, JSON.stringify(rec), { expirationTtl: 604800 });
+        } catch (_) {}
+      }
+    }
+
     return errorResponse(`Failed to create order in Shopify: ${err.message}`, "ORDER_CREATION_FAILED", 500);
   }
 }
+

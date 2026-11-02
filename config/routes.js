@@ -6,7 +6,7 @@ export const ROUTE_PATHNAMES = {
   SYSTEM_STATUS: "/system/status",
   CURRENT_SHOP: "/current-shop",
   ORDERS_LIST: "/orders",
-  SETTINGS_GET: "/settings",
+  SETTINGS_GET: "/api/settings",
   SETTINGS_SAVE: "/settings/save",
   SETTINGS_REGISTER: "/settings/register",
   HEALTH: "/health",
@@ -18,6 +18,11 @@ export const ROUTE_PATHNAMES = {
   SHIPPING_IMPORT_CSV: "/shipping/import-csv",
   SHIPPING_IMPORT_SHOPIFY: "/shipping/import-shopify",
   PUBLIC_SHIPPING_CALCULATE: "/public/shipping/calculate",
-  WEBHOOK_WAYL: "/webhooks/wayl"
+  WEBHOOK_WAYL: "/webhooks/wayl",
+  DASHBOARD_WEEKLY_SALES: "/dashboard/weekly-sales",
+  ABANDONED_LIST: "/abandoned/list",
+  ABANDONED_CONVERT: "/abandoned/convert",
+  ABANDONED_STATUS: "/abandoned/status",
+  ABANDONED_DELETE: "/abandoned/delete"
 };
 
