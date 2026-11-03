@@ -63,6 +63,8 @@ export async function webhooksWaylRoute(request, env) {
     return errorResponse("Payment session not found", "SESSION_NOT_FOUND", 404);
   }
 
+  const shop = session.shop;
+
   // Idempotency: Prevent duplicate order creation if webhook is delivered multiple times
   if (session.status === "paid" && session.shopify_order_id) {
     return successResponse({
@@ -72,13 +74,21 @@ export async function webhooksWaylRoute(request, env) {
     }, 200);
   }
 
-  // Check event status
-  const eventStatus = (eventData.status || eventData.data?.status || eventData.event || "PAID").toUpperCase();
-  const isPaid = eventStatus === "PAID" || eventStatus === "SUCCESS" || eventStatus === "COMPLETED";
+  // Check event status across all standard Wayl webhook attributes
+  const eventStatus = String(eventData.status || eventData.data?.status || eventData.event || "").toUpperCase();
+  const paymentStatus = String(eventData.paymentStatus || eventData.data?.paymentStatus || "").toUpperCase();
+  const webhookEvent = String(eventData.webhookEvent || eventData.data?.webhookEvent || "").toUpperCase();
+
+  const isPaid =
+    paymentStatus === "PAID" ||
+    webhookEvent === "PAYMENT.SUCCESS" ||
+    eventStatus === "PAID" ||
+    eventStatus === "SUCCESS" ||
+    eventStatus === "COMPLETED";
 
   if (!isPaid) {
     session.status = "failed";
-    session.error_message = `Payment status received: ${eventStatus}`;
+    session.error_message = `Payment status received: ${paymentStatus || webhookEvent || eventStatus}`;
     session.webhook_payload = eventData;
     session.updated_at = new Date().toISOString();
 
@@ -98,12 +108,11 @@ export async function webhooksWaylRoute(request, env) {
       }
     }
 
-    return successResponse({ received: true, status: eventStatus }, 200);
+    return successResponse({ received: true, status: eventStatus || paymentStatus }, 200);
   }
 
   // Payment is confirmed! Create paid order in Shopify
   const orderService = new OrderService(env);
-  const shop = session.shop;
   const customer = session.customer_info;
   const items = session.items;
   const pricing = session.pricing || {};
