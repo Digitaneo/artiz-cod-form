@@ -24,6 +24,8 @@ export const ROUTE_PATHNAMES = {
   ABANDONED_CONVERT: "/abandoned/convert",
   ABANDONED_STATUS: "/abandoned/status",
   ABANDONED_DELETE: "/abandoned/delete",
-  PUBLIC_VALIDATE_COUPON: "/public/validate-coupon"
+  PUBLIC_VALIDATE_COUPON: "/public/validate-coupon",
+  TRACKING_GET: "/api/tracking",
+  TRACKING_SAVE: "/settings/tracking/save"
 };
 

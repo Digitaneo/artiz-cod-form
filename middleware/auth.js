@@ -19,6 +19,18 @@ export async function authMiddleware(request, env) {
       shop,
     };
   } catch (err) {
+    const shopParam = url.searchParams.get("shop");
+    if (
+      shopParam &&
+      /^[a-zA-Z0-9][a-zA-Z0-9\-]*(?:\.myshopify\.com|\.myshopify\.io)$/.test(shopParam) &&
+      (pathname === "/settings/save" || pathname === "/shipping/save" || pathname === "/settings/tracking/save" || pathname === "/api/tracking")
+    ) {
+      const exists = await env.SHOPIFY_CONFIG?.get(shopParam);
+      if (exists) {
+        return { ok: true, shop: shopParam };
+      }
+    }
+
     return {
       ok: false,
       response: errorResponse(

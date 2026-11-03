@@ -8,6 +8,7 @@ export const PERMISSIONS = {
     "/fraud-prevention",
     "/sales-booster",
     "/integrations",
+    "/tracking",
     "/settings",
     "/public/checkout",
     "/public/order-details",
@@ -24,7 +25,9 @@ export const PERMISSIONS = {
     "/abandoned/list",
     "/abandoned/convert",
     "/abandoned/status",
-    "/abandoned/delete"
+    "/abandoned/delete",
+    "/api/tracking",
+    "/settings/tracking/save"
   ],
   ADMIN_ROUTES: [
     "/dashboard/summary",
@@ -40,7 +43,9 @@ export const PERMISSIONS = {
     "/abandoned/list",
     "/abandoned/convert",
     "/abandoned/status",
-    "/abandoned/delete"
+    "/abandoned/delete",
+    "/api/tracking",
+    "/settings/tracking/save"
   ]
 };
 

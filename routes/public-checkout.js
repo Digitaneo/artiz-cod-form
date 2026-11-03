@@ -1,8 +1,9 @@
 import { OrderService } from "../services/order.service.js";
 import { PaymentManagerService } from "../services/payment/payment-manager.service.js";
+import { CapiDispatcher } from "../services/tracking/capi-dispatcher.js";
 import { successResponse, errorResponse } from "../middleware/response.js";
 
-export async function publicCheckoutRoute(request, env) {
+export async function publicCheckoutRoute(request, env, ctx) {
   try {
     const body = await request.json();
     const {
@@ -54,6 +55,7 @@ export async function publicCheckoutRoute(request, env) {
         affiliate,
         customAttributes,
         shippingTitle,
+        orderTag: body.orderTag || "",
         clientDetails: {
           browser_ip: clientIp,
           user_agent: userAgent
@@ -61,6 +63,31 @@ export async function publicCheckoutRoute(request, env) {
       },
       orderService
     });
+
+    // Attach deduplication eventId and trigger background server-side tracking (CAPI)
+    if (result && result.orderId) {
+      const eventId = CapiDispatcher.generateEventId(shop, result.orderId);
+      result.eventId = eventId;
+
+      const totalNum = parseFloat(String(result.total || "0").replace(/[^0-9.]/g, "")) || 0;
+      const capiTask = CapiDispatcher.dispatchPurchase(env, shop, {
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        totalValue: totalNum,
+        currency: currency || "IQD",
+        customer,
+        items,
+        clientIp,
+        userAgent,
+        eventId
+      });
+
+      if (ctx?.waitUntil) {
+        ctx.waitUntil(capiTask);
+      } else {
+        capiTask.catch(e => console.warn("[CAPI Background]", e.message));
+      }
+    }
 
     return successResponse(result, 200);
   } catch (err) {

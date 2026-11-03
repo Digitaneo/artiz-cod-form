@@ -27,6 +27,7 @@ import { abandonedConvertRoute } from "./routes/abandoned-convert.js";
 import { abandonedStatusRoute } from "./routes/abandoned-status.js";
 import { abandonedDeleteRoute } from "./routes/abandoned-delete.js";
 import { publicValidateCouponRoute } from "./routes/public-validate-coupon.js";
+import { settingsTrackingGetRoute, settingsTrackingSaveRoute } from "./routes/settings-tracking.js";
 
 import { handleCors, applyCorsHeaders } from "./middleware/cors.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -36,7 +37,7 @@ import { successResponse, errorResponse } from "./middleware/response.js";
 import { ROUTE_PATHNAMES } from "./config/routes.js";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const startTime = Date.now();
 
     // 1. CORS Preflight
@@ -58,7 +59,7 @@ export default {
       // 3. Route Dispatcher
       switch (url.pathname) {
         case ROUTE_PATHNAMES.PUBLIC_CHECKOUT:
-          response = await publicCheckoutRoute(request, env);
+          response = await publicCheckoutRoute(request, env, ctx);
           break;
 
         case ROUTE_PATHNAMES.PUBLIC_ORDER_DETAILS:
@@ -164,6 +165,14 @@ export default {
           response = await publicValidateCouponRoute(request, env);
           break;
 
+        case ROUTE_PATHNAMES.TRACKING_GET:
+          response = await settingsTrackingGetRoute(request, env);
+          break;
+
+        case ROUTE_PATHNAMES.TRACKING_SAVE:
+          response = await settingsTrackingSaveRoute(request, env);
+          break;
+
         case "/":
         case "":
         case "/overview":
@@ -175,6 +184,7 @@ export default {
         case "/fraud-prevention":
         case "/sales-booster":
         case "/integrations":
+        case "/tracking":
           response = await dashboardEmbeddedRoute(request, env);
           break;
 

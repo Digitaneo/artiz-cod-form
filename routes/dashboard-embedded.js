@@ -2,6 +2,7 @@
 // Architecture: Separate Pages with Vertical Polaris Sidebar Navigation + App Bridge Navigation
 // Multi-Tenant Isolation per store (Digitaneo / Mohamed Belcaid)
 import { adminRequest } from "../shopify.js";
+import { CapiDispatcher } from "../services/tracking/capi-dispatcher.js";
 
 function renderPublicLandingHtml(env) {
   return `<!DOCTYPE html>
@@ -250,9 +251,12 @@ export async function dashboardEmbeddedRoute(request, env) {
   if (!requestedPage && url.pathname && url.pathname !== "/") {
     requestedPage = url.pathname.replace(/^\//, "");
   }
-  const ALLOWED_PAGES = ["overview", "abandoned-orders", "abandoned-checkouts", "form-builder", "shipping", "payment-methods", "fraud-prevention", "sales-booster", "integrations", "settings"];
+  const ALLOWED_PAGES = ["overview", "abandoned-orders", "abandoned-checkouts", "form-builder", "shipping", "payment-methods", "fraud-prevention", "sales-booster", "integrations", "tracking", "settings"];
   let initialPage = ALLOWED_PAGES.includes(requestedPage) ? requestedPage : "overview";
   if (initialPage === "abandoned-checkouts") initialPage = "abandoned-orders";
+  if (initialPage === "tracking") initialPage = "integrations";
+
+  const trackingConfig = await CapiDispatcher.getStoreTrackingConfig(env, shop);
 
   function formatCompactNumber(val) {
     const num = Number(val) || 0;
@@ -935,7 +939,8 @@ export async function dashboardEmbeddedRoute(request, env) {
         'payment-methods': 'Payment Methods',
         'fraud-prevention': 'Fraud Shield',
         'sales-booster': 'Sales Booster',
-        'integrations': 'Integrations',
+        'integrations': 'Analytics & Tracking Pixels',
+        'tracking': 'Analytics & Tracking Pixels',
         'settings': 'Settings'
       };
       var titleBar = document.querySelector('ui-title-bar');
@@ -3694,18 +3699,180 @@ export async function dashboardEmbeddedRoute(request, env) {
           </div>
         </section>
 
-        <!-- ==================== PAGE 8: INTEGRATIONS ==================== -->
-        <section id="page-integrations" class="page-view ${initialPage === 'integrations' ? 'active' : ''}">
+        <!-- ==================== PAGE 8: ANALYTICS & TRACKING PIXELS ==================== -->
+        <section id="page-integrations" class="page-view ${initialPage === 'integrations' || initialPage === 'tracking' ? 'active' : ''}">
           <div class="page-header">
             <div class="page-header-text">
               <div class="page-breadcrumbs">
                 <a onclick="navigateTo('overview')">Dashboard</a>
                 <span>/</span>
-                <span>Integrations</span>
+                <span>Analytics & Tracking Pixels</span>
               </div>
-              <h2>🔌 Integrations & Third-Party Apps</h2>
-              <p>Supercharge your COD store with marketing pixels, live spreadsheets, WhatsApp automations, and domestic couriers</p>
+              <h2>🎯 Analytics & Tracking Pixels</h2>
+              <p>تتبع التحويلات المزدوج (المتصفح + السيرفر CAPI) لمنصات Google و Meta و TikTok و Snapchat مع إلغاء التكرار التلقائي وحماية سرعة المتجر</p>
             </div>
+            <button class="btn btn-save" onclick="saveTrackingSettings(this)">💾 Save Tracking Settings</button>
+          </div>
+
+          <!-- Feature Highlight Banner -->
+          <div style="background: #edf7ff; border: 1px solid #bde0fe; border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 26px;">⚡</span>
+              <div>
+                <strong style="color: #0b5cab; font-size: 13.5px;">تتبع فائق السرعة بدون استهلاك موارد المتجر (Zero-Cost Overhead)</strong>
+                <div style="font-size: 12px; color: #3b5998; margin-top: 2px;">
+                  في حال تعطيل أي منصة أو ترك الحقل فارغاً، لن يتم استدعاء أي كود خارجي لحماية سرعة تحميل متجرك بنسبة 100%.
+                </div>
+              </div>
+            </div>
+            <span class="preset-badge" style="background: #d1e7dd; color: #0f5132; font-weight: 700; padding: 4px 10px;">Deduplication Enabled (event_id)</span>
+          </div>
+
+          <!-- Tracking Cards Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; margin-bottom: 30px;">
+            
+            <!-- 1. GOOGLE ECOSYSTEM -->
+            <div class="content-card" style="margin-bottom: 0; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="font-size: 26px; width: 44px; height: 44px; border-radius: 10px; background: rgba(234, 67, 53, 0.1); display: flex; align-items: center; justify-content: center;">🌐</div>
+                  <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1a1a1a; margin: 0;">منظومة Google</h3>
+                    <div style="font-size: 11.5px; color: var(--p-color-text-subdued);">GTM + GA4 + Google Ads + Search Console</div>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="cfg-track-google-enabled" ${trackingConfig.google?.enabled ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Google Search Console Tag / Meta Content:</label>
+                <input type="text" id="cfg-track-google-gscTag" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="google-site-verification=abc123xyz" value="${trackingConfig.google?.gscTag || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Google Tag Manager (GTM ID):</label>
+                <input type="text" id="cfg-track-google-gtmId" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="GTM-XXXXXXX" value="${trackingConfig.google?.gtmId || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Google Analytics 4 (Measurement ID):</label>
+                <input type="text" id="cfg-track-google-ga4Id" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="G-XXXXXXXXXX" value="${trackingConfig.google?.ga4Id || ''}">
+              </div>
+
+              <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600;">Google Ads Conversion ID:</label>
+                  <input type="text" id="cfg-track-google-googleAdsId" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="AW-XXXXXXXXXX" value="${trackingConfig.google?.googleAdsId || ''}">
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600;">Purchase Conversion Label:</label>
+                  <input type="text" id="cfg-track-google-googleAdsLabel" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="AbCdEfGhIjK" value="${trackingConfig.google?.googleAdsLabel || ''}">
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. META (FACEBOOK & INSTAGRAM) -->
+            <div class="content-card" style="margin-bottom: 0; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="font-size: 26px; width: 44px; height: 44px; border-radius: 10px; background: rgba(24, 119, 242, 0.1); display: flex; align-items: center; justify-content: center;">🟦</div>
+                  <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1a1a1a; margin: 0;">منظومة Meta (Facebook & Instagram)</h3>
+                    <div style="font-size: 11.5px; color: var(--p-color-text-subdued);">ربط مزدوج متزامن (المتصفح + CAPI السيرفر)</div>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="cfg-track-meta-enabled" ${trackingConfig.meta?.enabled ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Meta Pixel ID (Client-side):</label>
+                <input type="text" id="cfg-track-meta-pixelId" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="مثال: 123456789012345" value="${trackingConfig.meta?.pixelId || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Meta Conversions API (CAPI) Access Token:</label>
+                <input type="password" id="cfg-track-meta-capiToken" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="EAAG... رمز وصول خادم Events Manager" value="${trackingConfig.meta?.capiToken || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600;">Meta Test Event Code (اختياري للاختبار):</label>
+                <input type="text" id="cfg-track-meta-testCode" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="TEST12345" value="${trackingConfig.meta?.testEventCode || ''}">
+              </div>
+            </div>
+
+            <!-- 3. TIKTOK -->
+            <div class="content-card" style="margin-bottom: 0; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="font-size: 26px; width: 44px; height: 44px; border-radius: 10px; background: rgba(0, 0, 0, 0.08); display: flex; align-items: center; justify-content: center;">🎵</div>
+                  <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1a1a1a; margin: 0;">منظومة TikTok</h3>
+                    <div style="font-size: 11.5px; color: var(--p-color-text-subdued);">تتبع مزدوج (Pixel + Events API من السيرفر)</div>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="cfg-track-tiktok-enabled" ${trackingConfig.tiktok?.enabled ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">TikTok Pixel ID (Client-side):</label>
+                <input type="text" id="cfg-track-tiktok-pixelId" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="C1234567890ABCDEF" value="${trackingConfig.tiktok?.pixelId || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">TikTok Events API Access Token:</label>
+                <input type="password" id="cfg-track-tiktok-eventsApiToken" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="رمز الوصول المستخرج من TikTok Ads Manager" value="${trackingConfig.tiktok?.eventsApiToken || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600;">TikTok Test Event Code (اختياري للاختبار):</label>
+                <input type="text" id="cfg-track-tiktok-testCode" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="TEST_XXXXX" value="${trackingConfig.tiktok?.testEventCode || ''}">
+              </div>
+            </div>
+
+            <!-- 4. SNAPCHAT -->
+            <div class="content-card" style="margin-bottom: 0; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="font-size: 26px; width: 44px; height: 44px; border-radius: 10px; background: rgba(255, 252, 0, 0.25); display: flex; align-items: center; justify-content: center;">👻</div>
+                  <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1a1a1a; margin: 0;">منظومة Snapchat</h3>
+                    <div style="font-size: 11.5px; color: var(--p-color-text-subdued);">تتبع بيكسل سناب شات + تحويلات CAPI</div>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="cfg-track-snapchat-enabled" ${trackingConfig.snapchat?.enabled ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Snapchat Pixel ID:</label>
+                <input type="text" id="cfg-track-snapchat-pixelId" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${trackingConfig.snapchat?.pixelId || ''}">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600;">Snapchat Conversions API Token (اختياري):</label>
+                <input type="password" id="cfg-track-snapchat-capiToken" class="form-input" style="font-size: 12.5px; font-family: monospace;" placeholder="رمز CAPI المستخرج من Snapchat Ads Manager" value="${trackingConfig.snapchat?.capiToken || ''}">
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Section 2: Other Integrations -->
+          <div style="margin-top: 10px; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 800; color: #1a1a1a; display: flex; align-items: center; gap: 8px;">
+              <span>🚀 أدوات وتكاملات إضافية (Other Integrations)</span>
+            </h3>
+            <p style="font-size: 12.5px; color: var(--p-color-text-subdued);">تطبيقات التخزين السحابي وخدمات الشحن المحلية والرسائل المؤتمتة</p>
           </div>
 
           <div class="integrations-grid">
@@ -3723,12 +3890,11 @@ export async function dashboardEmbeddedRoute(request, env) {
                   </div>
                 </div>
                 <div class="integration-desc">
-                  Automatically streams every incoming COD order to your designated Google Sheet instantly. Ideal for call centers, inventory dispatchers, and accountants.
+                  Automatically streams every incoming COD order to your designated Google Sheet instantly.
                 </div>
               </div>
               <div class="integration-actions">
-                <button type="button" class="btn btn-primary" onclick="alert('Google Sheets integration setup guide will be available in the next release!')" style="font-size: 13px;">Configure Sheet</button>
-                <button type="button" class="btn btn-secondary" onclick="window.open('https://developers.google.com/sheets/api', '_blank')" style="font-size: 13px;">Learn More ↗</button>
+                <button type="button" class="btn btn-primary" onclick="alert('Google Sheets integration setup guide will be available soon!')" style="font-size: 13px;">Configure Sheet</button>
               </div>
             </div>
 
@@ -3746,39 +3912,15 @@ export async function dashboardEmbeddedRoute(request, env) {
                   </div>
                 </div>
                 <div class="integration-desc">
-                  Send instant automated WhatsApp messages with order confirmation buttons. Drastically reduces customer cancellations and fake phone numbers.
+                  Send instant automated WhatsApp messages with order confirmation buttons.
                 </div>
               </div>
               <div class="integration-actions">
                 <button type="button" class="btn btn-primary" onclick="navigateTo('settings'); showToast('Configure WhatsApp support number in Settings tab!');" style="font-size: 13px;">Setup WhatsApp</button>
-                <button type="button" class="btn btn-secondary" onclick="window.open('https://business.whatsapp.com', '_blank')" style="font-size: 13px;">Learn More ↗</button>
               </div>
             </div>
 
-            <!-- 3. Meta Conversions API -->
-            <div class="integration-card">
-              <div>
-                <div class="integration-top">
-                  <div class="integration-icon" style="background: #edf7ff; color: #1877f2;">🎯</div>
-                  <div>
-                    <div class="integration-title">
-                      <span>Meta Conversions API (CAPI)</span>
-                      <span class="preset-badge" style="background: #edf7ff; color: #0b5cab;">Server-Side</span>
-                    </div>
-                    <div style="font-size: 11px; color: var(--p-color-text-subdued); margin-top: 2px;">Direct server Purchase tracking</div>
-                  </div>
-                </div>
-                <div class="integration-desc">
-                  Fires Purchase events directly from Cloudflare Worker to Facebook CAPI. Bypasses iOS 14+ ad-blockers and privacy shields for 100% accurate ROAS tracking.
-                </div>
-              </div>
-              <div class="integration-actions">
-                <button type="button" class="btn btn-primary" onclick="alert('Meta CAPI direct gateway is ready to link with your Pixel ID and Access Token.')" style="font-size: 13px;">Connect Pixel & CAPI</button>
-                <button type="button" class="btn btn-secondary" onclick="window.open('https://developers.facebook.com/docs/marketing-api/conversions-api', '_blank')" style="font-size: 13px;">Learn More ↗</button>
-              </div>
-            </div>
-
-            <!-- 4. Webhooks & Automation -->
+            <!-- 3. Webhooks & Automation -->
             <div class="integration-card">
               <div>
                 <div class="integration-top">
@@ -3792,16 +3934,15 @@ export async function dashboardEmbeddedRoute(request, env) {
                   </div>
                 </div>
                 <div class="integration-desc">
-                  Send real-time JSON webhooks whenever an order is submitted, approved, or marked delivered. Connect with Zapier, Make.com, n8n, or your private CRM.
+                  Send real-time JSON webhooks whenever an order is submitted or approved.
                 </div>
               </div>
               <div class="integration-actions">
-                <button type="button" class="btn btn-primary" onclick="alert('Webhooks dispatcher is enabled. Custom endpoint configurations will open here.')" style="font-size: 13px;">Manage Webhooks</button>
-                <button type="button" class="btn btn-secondary" onclick="window.open('https://zapier.com', '_blank')" style="font-size: 13px;">Learn More ↗</button>
+                <button type="button" class="btn btn-primary" onclick="alert('Webhooks dispatcher is active. Custom endpoint configurations will open here.')" style="font-size: 13px;">Manage Webhooks</button>
               </div>
             </div>
 
-            <!-- 5. Shipping Carriers -->
+            <!-- 4. Shipping Carriers -->
             <div class="integration-card">
               <div>
                 <div class="integration-top">
@@ -3815,11 +3956,10 @@ export async function dashboardEmbeddedRoute(request, env) {
                   </div>
                 </div>
                 <div class="integration-desc">
-                  Seamlessly push confirmed orders to domestic delivery networks in Morocco, Algeria (Yalidine), and Iraq. Auto-generate tracking air waybills.
+                  Seamlessly push confirmed orders to domestic delivery networks in Iraq, Morocco, and Algeria.
                 </div>
               </div>
               <div class="integration-actions">
-                <button type="button" class="btn btn-primary" onclick="alert('Logistics courier integration hub will be unlocked for certified partner couriers.')" style="font-size: 13px;">Explore Couriers</button>
                 <button type="button" class="btn btn-secondary" onclick="navigateTo('shipping')" style="font-size: 13px;">Manage Rates ↗</button>
               </div>
             </div>
@@ -4147,6 +4287,68 @@ IQ,Duhok,,,,8000,</div>
       }
     });
 
+    function getTrackingPayload() {
+      return {
+        google: {
+          enabled: document.getElementById('cfg-track-google-enabled') ? document.getElementById('cfg-track-google-enabled').checked : false,
+          gscTag: document.getElementById('cfg-track-google-gscTag') ? document.getElementById('cfg-track-google-gscTag').value.trim() : '',
+          gtmId: document.getElementById('cfg-track-google-gtmId') ? document.getElementById('cfg-track-google-gtmId').value.trim() : '',
+          ga4Id: document.getElementById('cfg-track-google-ga4Id') ? document.getElementById('cfg-track-google-ga4Id').value.trim() : '',
+          googleAdsId: document.getElementById('cfg-track-google-googleAdsId') ? document.getElementById('cfg-track-google-googleAdsId').value.trim() : '',
+          googleAdsLabel: document.getElementById('cfg-track-google-googleAdsLabel') ? document.getElementById('cfg-track-google-googleAdsLabel').value.trim() : ''
+        },
+        meta: {
+          enabled: document.getElementById('cfg-track-meta-enabled') ? document.getElementById('cfg-track-meta-enabled').checked : false,
+          pixelId: document.getElementById('cfg-track-meta-pixelId') ? document.getElementById('cfg-track-meta-pixelId').value.trim() : '',
+          capiToken: document.getElementById('cfg-track-meta-capiToken') ? document.getElementById('cfg-track-meta-capiToken').value.trim() : '',
+          testEventCode: document.getElementById('cfg-track-meta-testCode') ? document.getElementById('cfg-track-meta-testCode').value.trim() : ''
+        },
+        tiktok: {
+          enabled: document.getElementById('cfg-track-tiktok-enabled') ? document.getElementById('cfg-track-tiktok-enabled').checked : false,
+          pixelId: document.getElementById('cfg-track-tiktok-pixelId') ? document.getElementById('cfg-track-tiktok-pixelId').value.trim() : '',
+          eventsApiToken: document.getElementById('cfg-track-tiktok-eventsApiToken') ? document.getElementById('cfg-track-tiktok-eventsApiToken').value.trim() : '',
+          testEventCode: document.getElementById('cfg-track-tiktok-testCode') ? document.getElementById('cfg-track-tiktok-testCode').value.trim() : ''
+        },
+        snapchat: {
+          enabled: document.getElementById('cfg-track-snapchat-enabled') ? document.getElementById('cfg-track-snapchat-enabled').checked : false,
+          pixelId: document.getElementById('cfg-track-snapchat-pixelId') ? document.getElementById('cfg-track-snapchat-pixelId').value.trim() : '',
+          capiToken: document.getElementById('cfg-track-snapchat-capiToken') ? document.getElementById('cfg-track-snapchat-capiToken').value.trim() : ''
+        }
+      };
+    }
+
+    async function saveTrackingSettings(clickedBtn) {
+      var origLabel = clickedBtn ? clickedBtn.innerHTML : '';
+      if (clickedBtn) {
+        clickedBtn.innerHTML = '⏳ Saving...';
+        clickedBtn.disabled = true;
+      }
+      var payload = getTrackingPayload();
+      try {
+        var res = await fetch('/settings/tracking/save?shop=' + encodeURIComponent('${shop}'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop: '${shop}', tracking: payload })
+        });
+        var data = await res.json().catch(function() { return { ok: true }; });
+        if (data && data.ok) {
+          showToast('Tracking and Pixel settings saved successfully! ✅');
+        } else {
+          showToast('Error: ' + (data?.error || 'Failed to save tracking settings'), true);
+        }
+      } catch (err) {
+        showToast('Connection error: ' + err.message, true);
+      } finally {
+        if (clickedBtn) {
+          clickedBtn.innerHTML = '✅ Saved!';
+          setTimeout(function() {
+            clickedBtn.innerHTML = origLabel || '💾 Save Tracking Settings';
+            clickedBtn.disabled = false;
+          }, 1500);
+        }
+      }
+    }
+
     async function saveAllSettings(clickedBtn) {
       var allSaveBtns = document.querySelectorAll('.btn-save, .btn-primary-save');
       var origLabels = [];
@@ -4295,8 +4497,10 @@ IQ,Duhok,,,,8000,</div>
         rates: rates
       };
 
+      var trackingPayload = getTrackingPayload();
+
       try {
-        var [res1, res2] = await Promise.all([
+        var [res1, res2, res3] = await Promise.all([
           fetch('/settings/save?shop=' + encodeURIComponent('${shop}'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4306,14 +4510,20 @@ IQ,Duhok,,,,8000,</div>
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ shop: '${shop}', config: shippingSettings })
+          }),
+          fetch('/settings/tracking/save?shop=' + encodeURIComponent('${shop}'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shop: '${shop}', tracking: trackingPayload })
           })
         ]);
 
         var data1 = await res1.json().catch(function() { return { ok: true }; });
         var data2 = await res2.json().catch(function() { return { ok: true }; });
+        var data3 = await res3.json().catch(function() { return { ok: true }; });
 
-        if ((data1 && data1.ok === false) || (data2 && data2.ok === false)) {
-          throw new Error((data1 && data1.error) || (data2 && data2.error) || 'Failed to save settings');
+        if ((data1 && data1.ok === false) || (data2 && data2.ok === false) || (data3 && data3.ok === false)) {
+          throw new Error((data1 && data1.error) || (data2 && data2.error) || (data3 && data3.error) || 'Failed to save settings');
         }
 
         hideSaveBar();

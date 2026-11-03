@@ -3,6 +3,7 @@
 
 import { WaylGateway } from "../services/payment/gateways/wayl.gateway.js";
 import { OrderService } from "../services/order.service.js";
+import { CapiDispatcher } from "../services/tracking/capi-dispatcher.js";
 import { successResponse, errorResponse } from "../middleware/response.js";
 
 export async function webhooksWaylRoute(request, env) {
@@ -154,6 +155,23 @@ export async function webhooksWaylRoute(request, env) {
       const abandonedKey = `abandoned:${shop}:${session.client_session_id || referenceId}`;
       await env.SHOPIFY_CONFIG.delete(abandonedKey);
     }
+
+    // Trigger background CAPI dispatch for paid electronic order
+    try {
+      const eventId = CapiDispatcher.generateEventId(shop, createdOrder.orderId);
+      const totalNum = parseFloat(String(createdOrder.total || session.amount || "0").replace(/[^0-9.]/g, "")) || 0;
+      CapiDispatcher.dispatchPurchase(env, shop, {
+        orderId: createdOrder.orderId,
+        orderNumber: createdOrder.orderNumber,
+        totalValue: totalNum,
+        currency: session.currency || "IQD",
+        customer: session.customer,
+        items: session.items,
+        clientIp: session.client_ip || "",
+        userAgent: session.user_agent || "",
+        eventId
+      }).catch(e => console.warn("[Wayl CAPI Background]", e.message));
+    } catch (_) {}
 
     return successResponse({
       ok: true,
