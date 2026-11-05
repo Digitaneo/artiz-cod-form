@@ -187,30 +187,39 @@ export class OrderService {
     }
 
     // Format phone to clean E.164 standard (no spaces) so Shopify creates customer and contact info
-    const cleanPhoneDigits = String(customer.phone || "").trim().replace(/[\s\-\(\)]/g, "");
+    const cleanPhoneDigits = String(customer.phone || "").trim().replace(/[^\d+]/g, "");
+    const countryPrefixes = {
+      "morocco": { code: "212", prefix: "+212" },
+      "saudi arabia": { code: "966", prefix: "+966" },
+      "united arab emirates": { code: "971", prefix: "+971" },
+      "iraq": { code: "964", prefix: "+964" },
+      "egypt": { code: "20", prefix: "+20" },
+      "kuwait": { code: "965", prefix: "+965" },
+      "qatar": { code: "974", prefix: "+974" },
+      "oman": { code: "968", prefix: "+968" },
+      "bahrain": { code: "973", prefix: "+973" },
+      "algeria": { code: "213", prefix: "+213" },
+      "tunisia": { code: "216", prefix: "+216" }
+    };
+    const targetInfo = countryPrefixes[targetCountry.toLowerCase()] || { code: "964", prefix: "+964" };
+
     let formattedPhone = cleanPhoneDigits;
-    if (!formattedPhone.startsWith("+")) {
-      if (formattedPhone.startsWith("00")) {
-        formattedPhone = "+" + formattedPhone.slice(2);
-      } else {
-        const countryPrefixes = {
-          "morocco": "+212",
-          "saudi arabia": "+966",
-          "united arab emirates": "+971",
-          "iraq": "+964",
-          "egypt": "+20",
-          "kuwait": "+965",
-          "qatar": "+974",
-          "oman": "+968",
-          "bahrain": "+973",
-          "algeria": "+213",
-          "tunisia": "+216"
-        };
-        const prefix = countryPrefixes[targetCountry.toLowerCase()] || "+212";
-        formattedPhone = formattedPhone.startsWith("0")
-          ? `${prefix}${formattedPhone.slice(1)}`
-          : `${prefix}${formattedPhone}`;
+    if (formattedPhone.startsWith("+")) {
+      // Strip redundant 0 right after country code e.g. +964077... -> +96477...
+      if (formattedPhone.startsWith("+" + targetInfo.code + "0")) {
+        formattedPhone = "+" + targetInfo.code + formattedPhone.slice(("+" + targetInfo.code + "0").length);
       }
+    } else if (formattedPhone.startsWith("00")) {
+      formattedPhone = "+" + formattedPhone.slice(2);
+    } else if (formattedPhone.startsWith(targetInfo.code)) {
+      // Already starts with country code like 964...
+      formattedPhone = "+" + formattedPhone;
+    } else if (formattedPhone.startsWith("0")) {
+      // Local number like 077...
+      formattedPhone = targetInfo.prefix + formattedPhone.slice(1);
+    } else {
+      // Direct local digits like 77...
+      formattedPhone = targetInfo.prefix + formattedPhone;
     }
 
     // Lookup existing customer ID by phone if not passed directly
@@ -528,6 +537,10 @@ export class OrderService {
         };
       }
     } catch (restErr) {
+      const msg = String(restErr?.message || "");
+      if (msg.includes("phone") && msg.includes("invalid")) {
+        throw new Error("INVALID_PHONE: رقم الهاتف المدخل غير صالح، يرجى كتابة رقم هاتف صحيح للتوصيل");
+      }
       throw new Error(`Order Creation Failed: ${restErr?.message}`);
     }
   }

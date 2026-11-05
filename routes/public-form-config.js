@@ -8,6 +8,7 @@ export const DEFAULT_FORM_CONFIG = {
   buttonMode: "replace", // "replace" (Replace theme buttons) | "hijack" (Native Button Hijack)
   // --- UI Text Identifiers ---
   buttonText: "أطلب الآن",
+  buttonSubtext: "🚚 نوصل طلباتك بسرعة وبموثوقية إلى باب بيتك",
   submitButtonText: "إكمال الدفع",
   formTitle: "معلومات الطلب",
   addToCartButtonText: "أضف إلى السلة",
@@ -42,7 +43,19 @@ export const DEFAULT_FORM_CONFIG = {
   thankYouTitle: "🎉 شكراً لك! تم استلام طلبك بنجاح",
   thankYouMsg: "سيتواصل معك فريق خدمة العملاء خلال 24 ساعة لتأكيد موعد التسليم.",
   thankYouWhatsappBtn: true,
-  thankYouWhatsappNumber: ""
+  thankYouWhatsappNumber: "",
+  boosterConfig: {
+    exitIntent: {
+      enabled: false,
+      couponCode: "",
+      discountBadge: "10%",
+      minOrderTotal: 0,
+      title: "Hold on!",
+      subtitle: "Congratulations! You've just unlocked a special discount!",
+      btnAccept: "Complete order with discount",
+      btnReject: "No thanks"
+    }
+  }
 };
 
 export async function publicFormConfigRoute(request, env) {
@@ -62,6 +75,9 @@ export async function publicFormConfigRoute(request, env) {
         ...DEFAULT_FORM_CONFIG,
         ...(shopData.settings?.formConfig || shopData.formConfig || {})
       };
+      if (shopData.settings?.formConfig && typeof shopData.settings.formConfig.buttonSubtext === "string") {
+        formConfig.buttonSubtext = shopData.settings.formConfig.buttonSubtext;
+      }
       formConfig.submitButtonText = formConfig.submitButtonText || formConfig.buttonText || DEFAULT_FORM_CONFIG.submitButtonText;
     }
 

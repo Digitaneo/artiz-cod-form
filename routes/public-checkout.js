@@ -91,6 +91,10 @@ export async function publicCheckoutRoute(request, env, ctx) {
 
     return successResponse(result, 200);
   } catch (err) {
-    return errorResponse(err.message || "Failed to process checkout", "CHECKOUT_FAILED", 500);
+    const rawMsg = String(err?.message || "Failed to process checkout");
+    if (rawMsg.includes("INVALID_PHONE") || (rawMsg.includes("phone") && rawMsg.includes("invalid"))) {
+      return errorResponse("رقم الهاتف غير صالح، يرجى كتابة رقم هاتف صحيح للتوصيل.", "INVALID_PHONE", 422);
+    }
+    return errorResponse(rawMsg, "CHECKOUT_FAILED", 500);
   }
 }

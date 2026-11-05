@@ -740,10 +740,10 @@ export async function dashboardEmbeddedRoute(request, env) {
             const ordersDiff = calcDiff(todayOrdersCount, yesterdayOrdersCount);
             const custDiff = calcDiff(todayCustCount, yesterdayCustCount);
 
-            // AOV (Average Order Value)
-            const recentMonthOrders = allOrders.filter(o => o.createdTs >= thirtyDaysAgo);
-            const recentMonthRev = recentMonthOrders.reduce((sum, o) => sum + o.amount, 0);
-            const aovVal = recentMonthOrders.length > 0 ? (recentMonthRev / recentMonthOrders.length).toFixed(2) : "0.00";
+            // AOV (Average Order Value) - Calculated accurately vs yesterday
+            const todayAovVal = todayOrdersCount > 0 ? (todaySales / todayOrdersCount) : 0;
+            const yesterdayAovVal = yesterdayOrdersCount > 0 ? (yesterdaySales / yesterdayOrdersCount) : 0;
+            const aovDiff = calcDiff(todayAovVal, yesterdayAovVal);
 
             todayMetrics = {
               sales: todaySales,
@@ -757,10 +757,10 @@ export async function dashboardEmbeddedRoute(request, env) {
               customers: todayCustCount,
               customersGrowth: custDiff.text,
               customersGrowthPositive: custDiff.isPos,
-              aov: formatCompactNumber(aovVal),
-              aovExact: Number(aovVal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-              aovGrowth: "+100%",
-              aovGrowthPositive: true
+              aov: formatCompactNumber(todayAovVal),
+              aovExact: Number(todayAovVal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+              aovGrowth: aovDiff.text,
+              aovGrowthPositive: aovDiff.isPos
             };
 
             // 3. Compute Accurate Fulfillment & Delivery Breakdown (24h, 48h)
@@ -926,6 +926,7 @@ export async function dashboardEmbeddedRoute(request, env) {
   const currencyDisplay = currencySymbolMap[shopCurrency] || shopCurrency;
   const storeDisplayTitle = (shop === "iuq7xa-0g.myshopify.com") ? "Aladdin Fitness" : shop;
   const storeDisplayDomain = (shop === "iuq7xa-0g.myshopify.com") ? "https://aladdinfitness.com" : `https://${shop}`;
+  const exitIntentCfg = formConfig.boosterConfig?.exitIntent || {};
 
   const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -2424,10 +2425,10 @@ export async function dashboardEmbeddedRoute(request, env) {
                 ${todayMetrics.aov} <span class="dash-kpi-cur">${currencyDisplay}</span>
               </div>
               <div class="dash-kpi-footer">
-                <span class="dash-trend-pill trend-up">
+                <span class="dash-trend-pill ${todayMetrics.aovGrowthPositive ? 'trend-up' : 'trend-down'}">
                   ${todayMetrics.aovGrowth}
                 </span>
-                <span class="dash-trend-label">vs last month</span>
+                <span class="dash-trend-label">vs yesterday</span>
               </div>
             </div>
           </div>
@@ -3487,63 +3488,90 @@ export async function dashboardEmbeddedRoute(request, env) {
                 <span>/</span>
                 <span>Sales Booster</span>
               </div>
-              <h2>⚡ Sales Booster & Urgency Tools</h2>
-              <p>Boost store conversions with urgency timers, live inventory stock counters, and trust badges</p>
+              <h2>🎁 Exit-Intent Abandonment Discount Popup</h2>
+              <p>Recover abandoning shoppers: when a customer attempts to close the checkout form, display an exclusive discount offer to convert them instantly.</p>
             </div>
             <button class="btn btn-save" onclick="saveAllSettings(this)">💾 Save Booster Settings</button>
           </div>
 
-          <div class="content-card">
-            <!-- Countdown -->
-            <div class="form-toggle">
+          <div class="content-card" style="padding: 24px;">
+            <!-- Main Toggle -->
+            <div class="form-toggle" style="border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 18px; margin-bottom: 20px;">
               <div>
-                <label for="cfg-boost-countdown">Limited-Time Offer Countdown Timer</label>
-                <div style="font-size: 12px; color: var(--p-color-text-subdued);">Creates a strong sense of urgency before the customer's exclusive deal expires.</div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <input type="number" id="cfg-boost-countdownMinutes" class="form-input" style="width: 100px; text-align: center;" value="${formConfig.boosterConfig?.countdownMinutes || 15}" placeholder="Minutes">
-                <label class="switch">
-                  <input type="checkbox" id="cfg-boost-countdown" ${formConfig.boosterConfig?.enableCountdown ? "checked" : ""}>
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 14px;">
-              <label>Countdown Banner Text:</label>
-              <input type="text" id="cfg-boost-countdownText" class="form-input" value="${formConfig.boosterConfig?.countdownText || 'عرض حصري مؤقت! ينتهي العرض خلال:'}">
-            </div>
-
-            <!-- Stock Counter -->
-            <div class="form-toggle" style="margin-top: 20px;">
-              <div>
-                <label for="cfg-boost-stock">Low Stock Urgency Counter</label>
-                <div style="font-size: 12px; color: var(--p-color-text-subdued);">Displays remaining inventory alert to drive faster buying decisions.</div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <input type="number" id="cfg-boost-stockCount" class="form-input" style="width: 100px; text-align: center;" value="${formConfig.boosterConfig?.stockCount || 5}" placeholder="Items">
-                <label class="switch">
-                  <input type="checkbox" id="cfg-boost-stock" ${formConfig.boosterConfig?.enableStockCounter ? "checked" : ""}>
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 14px;">
-              <label>Low Stock Alert Text:</label>
-              <input type="text" id="cfg-boost-stockText" class="form-input" value="${formConfig.boosterConfig?.stockText || 'سارع بالطلب! متبقي فقط {stock} قطع في المخزن'}">
-            </div>
-
-            <!-- Trust Badges -->
-            <div class="form-toggle" style="margin-top: 20px;">
-              <div>
-                <label for="cfg-boost-trust">Trust & Quality Badges</label>
-                <div style="font-size: 12px; color: var(--p-color-text-subdued);">Displays security badges: Fast Nationwide Delivery, Quality Guarantee, Easy Exchange.</div>
+                <label for="cfg-boost-exitIntent-enabled" style="font-size: 15px; font-weight: 700;">Enable Exit-Intent Discount Popup</label>
+                <div style="font-size: 12.5px; color: var(--p-color-text-subdued); margin-top: 2px;">
+                  Triggers an interactive discount offer popup when a customer tries to close the checkout form without completing their order.
+                </div>
               </div>
               <label class="switch">
-                <input type="checkbox" id="cfg-boost-trust" ${formConfig.boosterConfig?.enableTrustBadges !== false ? "checked" : ""}>
+                <input type="checkbox" id="cfg-boost-exitIntent-enabled" ${exitIntentCfg.enabled ? "checked" : ""}>
                 <span class="slider"></span>
               </label>
+            </div>
+
+            <!-- Discount Code & Badge -->
+            <div class="form-row">
+              <div class="form-group">
+                <label style="font-weight: 600;">Shopify Discount Coupon Code:</label>
+                <input type="text" id="cfg-boost-exitIntent-coupon" class="form-input" style="font-family: monospace; font-weight: 700; text-transform: uppercase;" value="${exitIntentCfg.couponCode || ''}" placeholder="e.g. SPECIAL10 or SAVE10">
+                <div style="font-size: 11.5px; color: var(--p-color-text-subdued); margin-top: 4px;">Standard discount code created in your Shopify Admin. Applied automatically upon customer acceptance.</div>
+              </div>
+              <div class="form-group">
+                <label style="font-weight: 600;">Discount Badge Display Text:</label>
+                <input type="text" id="cfg-boost-exitIntent-badge" class="form-input" style="font-weight: 700;" value="${exitIntentCfg.discountBadge || '10%'}" placeholder="e.g. 10% or 10% OFF or خصم 10%">
+                <div style="font-size: 11.5px; color: var(--p-color-text-subdued); margin-top: 4px;">Prominent badge text displayed in the center star badge.</div>
+              </div>
+            </div>
+
+            <!-- Minimum Order Value Trigger Condition -->
+            <div class="form-group" style="margin-top: 14px; background: #f8fafc; border: 1px solid var(--p-color-border); border-radius: var(--radius-sm); padding: 14px 16px;">
+              <label style="font-weight: 700; color: var(--p-color-text, #0f172a);">Minimum Cart / Order Total Condition (${currencyDisplay}):</label>
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px;">
+                <input type="number" id="cfg-boost-exitIntent-minTotal" class="form-input" style="max-width: 200px; font-weight: 700;" value="${exitIntentCfg.minOrderTotal || 0}" placeholder="0" min="0">
+                <span style="font-size: 13px; font-weight: 600; color: var(--p-color-text-subdued);">${currencyDisplay}</span>
+              </div>
+              <div style="font-size: 12px; color: var(--p-color-text-subdued); margin-top: 6px;">
+                The popup will <strong>only appear</strong> if the customer's cart or order total is equal to or greater than this value (e.g. <code>90000</code>). Set to <code>0</code> to show for all order amounts.
+              </div>
+            </div>
+
+            <!-- Modal Content Customization -->
+            <h3 style="margin: 22px 0 14px; font-size: 14.5px; font-weight: 700; border-top: 1px solid var(--p-color-border-subdued); padding-top: 16px;">Popup Text & Call-To-Action Labels</h3>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Popup Title:</label>
+                <input type="text" id="cfg-boost-exitIntent-title" class="form-input" value="${exitIntentCfg.title || 'Hold on!'}" placeholder="e.g. Hold on! or انتظر لحظة!">
+              </div>
+              <div class="form-group">
+                <label>Popup Subtitle / Message:</label>
+                <input type="text" id="cfg-boost-exitIntent-subtitle" class="form-input" value="${exitIntentCfg.subtitle || 'Congratulations! You have just unlocked a special discount!'}" placeholder="e.g. تهانينا! لقد حصلت على خصم فوري خاص">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Accept Discount Button Label:</label>
+                <input type="text" id="cfg-boost-exitIntent-btnAccept" class="form-input" value="${exitIntentCfg.btnAccept || 'Complete order with discount'}" placeholder="e.g. Complete order with discount or أكمل الطلب مع الخصم">
+              </div>
+              <div class="form-group">
+                <label>Reject / Dismiss Button Label:</label>
+                <input type="text" id="cfg-boost-exitIntent-btnReject" class="form-input" value="${exitIntentCfg.btnReject || 'No thanks'}" placeholder="e.g. No thanks or لا، شكراً">
+              </div>
+            </div>
+
+            <!-- Live Preview Card -->
+            <div style="margin-top: 24px; background: #fafafa; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 24px 20px; text-align: center; max-width: 360px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.04);">
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Visual Preview (As shown to customer)</div>
+              <h4 style="margin: 0 0 6px 0; font-size: 20px; font-weight: 800; color: #0f172a;">Hold on!</h4>
+              <p style="font-size: 12.5px; color: #475569; margin: 0 0 16px 0; line-height: 1.4;">Congratulations! You've just unlocked a special discount!</p>
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 88px; height: 88px; background: linear-gradient(135deg, #ff416c, #ff4b2b); color: #fff; font-size: 24px; font-weight: 900; border-radius: 50%; box-shadow: 0 6px 20px rgba(255, 75, 43, 0.4); margin-bottom: 18px; transform: rotate(-5deg);">
+                10%
+              </div>
+              <div style="display: block; background: linear-gradient(90deg, #ff416c, #ff4b2b); color: #fff; font-size: 13.5px; font-weight: 700; padding: 12px 18px; border-radius: 8px; margin-bottom: 10px; cursor: pointer;">
+                Complete order with 10% OFF
+              </div>
+              <div style="font-size: 12.5px; color: #64748b; cursor: pointer; text-decoration: underline;">No thanks</div>
             </div>
           </div>
         </section>
@@ -3753,13 +3781,12 @@ export async function dashboardEmbeddedRoute(request, env) {
             <div style="display: flex; align-items: center; gap: 12px;">
               <span style="font-size: 26px;">⚡</span>
               <div>
-                <strong style="color: #0b5cab; font-size: 13.5px;">تتبع فائق السرعة بدون استهلاك موارد المتجر (Zero-Cost Overhead)</strong>
+                <strong style="color: #0b5cab; font-size: 13.5px;">⚡ Ultra-Fast Tracking with Zero Store Overhead</strong>
                 <div style="font-size: 12px; color: #3b5998; margin-top: 2px;">
-                  في حال تعطيل أي منصة أو ترك الحقل فارغاً، لن يتم استدعاء أي كود خارجي لحماية سرعة تحميل متجرك بنسبة 100%.
+                  When any platform is disabled or left empty, no external scripts or trackers are loaded, preserving 100% of your store speed and performance.
                 </div>
               </div>
             </div>
-            <span class="preset-badge" style="background: #d1e7dd; color: #0f5132; font-weight: 700; padding: 4px 10px;">Deduplication Enabled (event_id)</span>
           </div>
 
           <!-- Tracking Cards Grid -->
@@ -3902,11 +3929,11 @@ export async function dashboardEmbeddedRoute(request, env) {
           </div>
 
           <!-- Section 2: Other Integrations -->
-          <div style="margin-top: 10px; margin-bottom: 16px;">
-            <h3 style="font-size: 16px; font-weight: 800; color: #1a1a1a; display: flex; align-items: center; gap: 8px;">
-              <span>🚀 أدوات وتكاملات إضافية (Other Integrations)</span>
+          <div style="margin-top: 24px; margin-bottom: 16px; padding: 12px 16px; background: #f8fafc; border: 1px solid var(--p-color-border); border-radius: var(--radius-sm);">
+            <h3 style="font-size: 16px; font-weight: 800; color: var(--p-color-text, #0f172a); display: flex; align-items: center; gap: 8px; margin: 0 0 4px 0;">
+              <span>🚀 Additional Tools & Integrations</span>
             </h3>
-            <p style="font-size: 12.5px; color: var(--p-color-text-subdued);">تطبيقات التخزين السحابي وخدمات الشحن المحلية والرسائل المؤتمتة</p>
+            <p style="font-size: 12.5px; color: var(--p-color-text-subdued, #64748b); margin: 0;">Cloud spreadsheet sync, local courier fulfillment, and automated notifications</p>
           </div>
 
           <div class="integrations-grid">
@@ -4464,13 +4491,16 @@ IQ,Duhok,,,,8000,</div>
           blacklistPhones: document.getElementById('cfg-fraud-blacklist').value
         },
         boosterConfig: {
-          enableCountdown: document.getElementById('cfg-boost-countdown').checked,
-          countdownMinutes: Number(document.getElementById('cfg-boost-countdownMinutes').value) || 15,
-          countdownText: document.getElementById('cfg-boost-countdownText').value,
-          enableStockCounter: document.getElementById('cfg-boost-stock').checked,
-          stockCount: Number(document.getElementById('cfg-boost-stockCount').value) || 5,
-          stockText: document.getElementById('cfg-boost-stockText').value,
-          enableTrustBadges: document.getElementById('cfg-boost-trust').checked
+          exitIntent: {
+            enabled: document.getElementById('cfg-boost-exitIntent-enabled') ? document.getElementById('cfg-boost-exitIntent-enabled').checked : false,
+            couponCode: document.getElementById('cfg-boost-exitIntent-coupon') ? document.getElementById('cfg-boost-exitIntent-coupon').value.trim() : '',
+            discountBadge: document.getElementById('cfg-boost-exitIntent-badge') ? document.getElementById('cfg-boost-exitIntent-badge').value.trim() : '10%',
+            minOrderTotal: Number(document.getElementById('cfg-boost-exitIntent-minTotal') ? document.getElementById('cfg-boost-exitIntent-minTotal').value : 0) || 0,
+            title: document.getElementById('cfg-boost-exitIntent-title') ? document.getElementById('cfg-boost-exitIntent-title').value.trim() : 'Hold on!',
+            subtitle: document.getElementById('cfg-boost-exitIntent-subtitle') ? document.getElementById('cfg-boost-exitIntent-subtitle').value.trim() : 'Congratulations! You have just unlocked a special discount!',
+            btnAccept: document.getElementById('cfg-boost-exitIntent-btnAccept') ? document.getElementById('cfg-boost-exitIntent-btnAccept').value.trim() : 'Complete order with discount',
+            btnReject: document.getElementById('cfg-boost-exitIntent-btnReject') ? document.getElementById('cfg-boost-exitIntent-btnReject').value.trim() : 'No thanks'
+          }
         }
       };
 
