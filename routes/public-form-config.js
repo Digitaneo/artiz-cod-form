@@ -79,6 +79,16 @@ export async function publicFormConfigRoute(request, env) {
         formConfig.buttonSubtext = shopData.settings.formConfig.buttonSubtext;
       }
       formConfig.submitButtonText = formConfig.submitButtonText || formConfig.buttonText || DEFAULT_FORM_CONFIG.submitButtonText;
+
+      // Sanitize boosterConfig strings against question marks or corrupt encoding
+      if (formConfig.boosterConfig?.exitIntent) {
+        const ei = formConfig.boosterConfig.exitIntent;
+        const isQ = (str) => !str || /^\?+$/.test(String(str).replace(/\s+/g, ""));
+        if (isQ(ei.title)) ei.title = "لأنك غالي علينا";
+        if (isQ(ei.subtitle)) ei.subtitle = "تهانينا! لقد حصلت للتو على خصم خاص لطلبك!";
+        if (isQ(ei.btnAccept)) ei.btnAccept = `قبول العرض وخصم ${ei.discountBadge || "10%"}`;
+        if (isQ(ei.btnReject)) ei.btnReject = "لا، شكراً";
+      }
     }
 
     const shippingService = new ShippingService(env);

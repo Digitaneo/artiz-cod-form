@@ -926,7 +926,15 @@ export async function dashboardEmbeddedRoute(request, env) {
   const currencyDisplay = currencySymbolMap[shopCurrency] || shopCurrency;
   const storeDisplayTitle = (shop === "iuq7xa-0g.myshopify.com") ? "Aladdin Fitness" : shop;
   const storeDisplayDomain = (shop === "iuq7xa-0g.myshopify.com") ? "https://aladdinfitness.com" : `https://${shop}`;
-  const exitIntentCfg = formConfig.boosterConfig?.exitIntent || {};
+  const isQuestionStr = (val) => !val || /^\?+$/.test(String(val).replace(/\s+/g, ''));
+  const rawExitIntent = formConfig.boosterConfig?.exitIntent || {};
+  const exitIntentCfg = {
+    ...rawExitIntent,
+    title: isQuestionStr(rawExitIntent.title) ? "لأنك غالي علينا" : rawExitIntent.title,
+    subtitle: isQuestionStr(rawExitIntent.subtitle) ? "تهانينا! لقد حصلت للتو على خصم خاص لطلبك!" : rawExitIntent.subtitle,
+    btnAccept: isQuestionStr(rawExitIntent.btnAccept) ? `قبول العرض وخصم ${rawExitIntent.discountBadge || "10%"}` : rawExitIntent.btnAccept,
+    btnReject: isQuestionStr(rawExitIntent.btnReject) ? "لا، شكراً" : rawExitIntent.btnReject
+  };
 
   const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -4499,10 +4507,10 @@ IQ,Duhok,,,,8000,</div>
             couponCode: document.getElementById('cfg-boost-exitIntent-coupon') ? document.getElementById('cfg-boost-exitIntent-coupon').value.trim() : '',
             discountBadge: document.getElementById('cfg-boost-exitIntent-badge') ? document.getElementById('cfg-boost-exitIntent-badge').value.trim() : '10%',
             minOrderTotal: Number(document.getElementById('cfg-boost-exitIntent-minTotal') ? document.getElementById('cfg-boost-exitIntent-minTotal').value : 0) || 0,
-            title: document.getElementById('cfg-boost-exitIntent-title') ? document.getElementById('cfg-boost-exitIntent-title').value.trim() : 'Hold on!',
-            subtitle: document.getElementById('cfg-boost-exitIntent-subtitle') ? document.getElementById('cfg-boost-exitIntent-subtitle').value.trim() : 'Congratulations! You have just unlocked a special discount!',
-            btnAccept: document.getElementById('cfg-boost-exitIntent-btnAccept') ? document.getElementById('cfg-boost-exitIntent-btnAccept').value.trim() : 'Complete order with discount',
-            btnReject: document.getElementById('cfg-boost-exitIntent-btnReject') ? document.getElementById('cfg-boost-exitIntent-btnReject').value.trim() : 'No thanks'
+            title: document.getElementById('cfg-boost-exitIntent-title') ? document.getElementById('cfg-boost-exitIntent-title').value.trim() : 'لأنك غالي علينا',
+            subtitle: document.getElementById('cfg-boost-exitIntent-subtitle') ? document.getElementById('cfg-boost-exitIntent-subtitle').value.trim() : 'تهانينا! لقد حصلت للتو على خصم خاص لطلبك!',
+            btnAccept: document.getElementById('cfg-boost-exitIntent-btnAccept') ? document.getElementById('cfg-boost-exitIntent-btnAccept').value.trim() : 'قبول العرض والحصول على الخصم',
+            btnReject: document.getElementById('cfg-boost-exitIntent-btnReject') ? document.getElementById('cfg-boost-exitIntent-btnReject').value.trim() : 'لا، شكراً'
           }
         }
       };
