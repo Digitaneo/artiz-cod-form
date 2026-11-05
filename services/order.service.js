@@ -165,13 +165,26 @@ export class OrderService {
     }
 
     const shopCountry = await this.getShopCountry(shop);
-    const targetCountry = customer.country || shopCountry || "Morocco";
-    const defaultCity = customer.city || (
-      targetCountry.toLowerCase() === "iraq" ? "بغداد" :
-      targetCountry.toLowerCase() === "algeria" ? "الجزائر" :
-      targetCountry.toLowerCase() === "saudi arabia" ? "الرياض" :
-      "الدار البيضاء"
-    );
+    const targetCountry = customer.country || shopCountry || "Iraq";
+
+    // Dynamic City and Province resolution - Never force fake defaults like "بغداد"
+    let cleanAddress = String(customer.address || "").trim();
+    let resolvedCity = String(customer.city || "").trim();
+    let resolvedProvince = String(customer.region || customer.province || "").trim();
+
+    if (!resolvedCity) {
+      // Check if address was entered with delimiters (e.g. "البصرة / المعقل" or "أربيل - عنكاوا")
+      const parts = cleanAddress.split(/[\/،,\-]/).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        resolvedCity = parts[0];
+        if (!resolvedProvince) resolvedProvince = parts[0];
+      } else if (resolvedProvince) {
+        resolvedCity = resolvedProvince;
+      } else {
+        const firstWord = cleanAddress.split(/\s+/)[0] || "";
+        resolvedCity = firstWord.length >= 3 ? firstWord : targetCountry;
+      }
+    }
 
     // Format phone to clean E.164 standard (no spaces) so Shopify creates customer and contact info
     const cleanPhoneDigits = String(customer.phone || "").trim().replace(/[\s\-\(\)]/g, "");
@@ -217,15 +230,16 @@ export class OrderService {
       }
     }
 
-    // Sanitize address1 to ensure city is not repeated inside address1
-    let cleanAddress = String(customer.address || "").trim();
-    if (defaultCity && cleanAddress) {
-      const cityRegexStart = new RegExp(`^${defaultCity}[\\s،,-]+`, "i");
-      const cityRegexEnd = new RegExp(`[\\s،,-]+${defaultCity}$`, "i");
-      const stripped = cleanAddress.replace(cityRegexStart, "").replace(cityRegexEnd, "").trim();
-      if (stripped.length >= 2) {
-        cleanAddress = stripped;
-      }
+    // Sanitize address1 to ensure city is not repeated unnecessarily inside address1
+    if (resolvedCity && cleanAddress) {
+      try {
+        const cityRegexStart = new RegExp(`^${resolvedCity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s،,\\-]+`, "i");
+        const cityRegexEnd = new RegExp(`[\\s،,\\-]+${resolvedCity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+        const stripped = cleanAddress.replace(cityRegexStart, "").replace(cityRegexEnd, "").trim();
+        if (stripped.length >= 2) {
+          cleanAddress = stripped;
+        }
+      } catch (_) {}
     }
 
     // Ensure customer has phone on profile if missing (without appending duplicate address records)
@@ -268,8 +282,8 @@ export class OrderService {
           lastName,
           phone: formattedPhone,
           address1: cleanAddress,
-          city: defaultCity,
-          province: customer.region || customer.province || undefined,
+          city: resolvedCity,
+          province: resolvedProvince || undefined,
           country: targetCountry
         },
         billingAddress: {
@@ -277,8 +291,8 @@ export class OrderService {
           lastName,
           phone: formattedPhone,
           address1: cleanAddress,
-          city: defaultCity,
-          province: customer.region || customer.province || undefined,
+          city: resolvedCity,
+          province: resolvedProvince || undefined,
           country: targetCountry
         },
         phone: formattedPhone,
@@ -358,7 +372,7 @@ export class OrderService {
         if (orderDetails?.order?.order_status_url) {
           thankYouUrl = orderDetails.order.order_status_url;
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const codOrderRecord = {
         orderId: `gid://shopify/Order/${numericOrderId}`,
@@ -366,9 +380,9 @@ export class OrderService {
         customer: {
           name: `${firstName} ${lastName}`.trim(),
           phone: formattedPhone,
-          city: customer.city,
-          province: customer.region || customer.province || "",
-          address: customer.address
+          city: resolvedCity,
+          province: resolvedProvince,
+          address: cleanAddress
         },
         total: orderTotal,
         currency,
@@ -436,8 +450,8 @@ export class OrderService {
             last_name: lastName,
             phone: formattedPhone,
             address1: cleanAddress,
-            city: defaultCity,
-            province: customer.region || customer.province || undefined,
+            city: resolvedCity,
+            province: resolvedProvince || undefined,
             country: targetCountry
           },
           shipping_address: {
@@ -445,8 +459,8 @@ export class OrderService {
             last_name: lastName,
             phone: formattedPhone,
             address1: cleanAddress,
-            city: defaultCity,
-            province: customer.region || customer.province || undefined,
+            city: resolvedCity,
+            province: resolvedProvince || undefined,
             country: targetCountry
           },
           financial_status: options.paymentPending === false ? "paid" : "pending",
@@ -491,8 +505,9 @@ export class OrderService {
           customer: {
             name: `${firstName} ${lastName}`.trim(),
             phone: formattedPhone,
-            city: customer.city,
-            address: customer.address
+            city: resolvedCity,
+            province: resolvedProvince,
+            address: cleanAddress
           },
           total: orderTotal,
           currency: order.currency,

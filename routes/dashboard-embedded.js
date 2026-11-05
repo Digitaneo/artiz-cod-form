@@ -449,7 +449,7 @@ export async function dashboardEmbeddedRoute(request, env) {
                 currencyCode
                 ianaTimezone
               }
-              orders(first: 100, sortKey: CREATED_AT, reverse: true) {
+              orders(first: 250, sortKey: CREATED_AT, reverse: true) {
                 edges {
                   node {
                     id
@@ -458,6 +458,13 @@ export async function dashboardEmbeddedRoute(request, env) {
                     cancelledAt
                     cancelReason
                     tags
+                    phone
+                    shippingAddress {
+                      phone
+                      name
+                      city
+                      province
+                    }
                     currentTotalPriceSet {
                       shopMoney {
                         amount
@@ -499,6 +506,13 @@ export async function dashboardEmbeddedRoute(request, env) {
                     cancelledAt
                     cancelReason
                     tags
+                    phone
+                    shippingAddress {
+                      phone
+                      name
+                      city
+                      province
+                    }
                     currentTotalPriceSet {
                       shopMoney {
                         amount
@@ -571,8 +585,14 @@ export async function dashboardEmbeddedRoute(request, env) {
               const createdTs = createdDate.getTime();
               const amountNum = Number(o.currentTotalPriceSet?.shopMoney?.amount || 0);
               const cur = o.currentTotalPriceSet?.shopMoney?.currencyCode || shopCurrency;
-              const custName = o.customer ? `${o.customer.firstName || ""} ${o.customer.lastName || ""}`.trim() : "Customer";
-              const phone = o.customer?.phone || o.customer?.email || "N/A";
+              let custName = o.customer ? `${o.customer.firstName || ""} ${o.customer.lastName || ""}`.trim() : "";
+              if (!custName && o.shippingAddress?.name) {
+                custName = o.shippingAddress.name.trim();
+              }
+              if (!custName) {
+                custName = "Customer";
+              }
+              const phone = o.phone || o.shippingAddress?.phone || o.customer?.phone || o.customer?.email || "N/A";
               const gateways = Array.isArray(o.paymentGatewayNames) ? o.paymentGatewayNames.join(", ").toLowerCase() : "";
               const isCod = gateways.includes("cash") || gateways.includes("cod") || gateways.includes("manual") || gateways === "";
               const finStatus = (o.displayFinancialStatus || "PENDING").toUpperCase();
@@ -681,17 +701,31 @@ export async function dashboardEmbeddedRoute(request, env) {
             const totalSum = allOrders.reduce((sum, o) => sum + o.amount, 0);
             stats.revenue = totalSum.toLocaleString();
 
+            // Deduplicate unique customers accurately by phone digits (or customer name / ID)
+            function getCustomerKey(o) {
+              const rawPhone = (o.phone || "").replace(/\D/g, "");
+              if (rawPhone.length >= 7) {
+                return "p:" + rawPhone.slice(-9);
+              }
+              const cleanName = (o.customer || "").trim().toLowerCase();
+              if (cleanName && cleanName !== "customer" && cleanName !== "عميل") {
+                return "n:" + cleanName;
+              }
+              return "id:" + o.id;
+            }
+
             // 2. Compute Today vs Yesterday (Timezone-Aware)
             const todayOrders = allOrders.filter(o => getStoreDayDate(new Date(o.createdTs)) === todayDateStr && !o.isCancelled);
             const todaySales = todayOrders.reduce((sum, o) => sum + o.amount, 0);
             const todayOrdersCount = todayOrders.length;
-            const todayCustSet = new Set(todayOrders.map(o => o.phone !== "N/A" ? o.phone : o.customer));
+            const todayCustSet = new Set(todayOrders.map(o => getCustomerKey(o)));
             const todayCustCount = todayCustSet.size;
 
             const yesterdayOrders = allOrders.filter(o => getStoreDayDate(new Date(o.createdTs)) === yesterdayDateStr && !o.isCancelled);
             const yesterdaySales = yesterdayOrders.reduce((sum, o) => sum + o.amount, 0);
             const yesterdayOrdersCount = yesterdayOrders.length;
-            const yesterdayCustCount = new Set(yesterdayOrders.map(o => o.phone !== "N/A" ? o.phone : o.customer)).size;
+            const yesterdayCustSet = new Set(yesterdayOrders.map(o => getCustomerKey(o)));
+            const yesterdayCustCount = yesterdayCustSet.size;
 
             function calcDiff(cur, prev) {
               if (prev === 0) return { text: cur > 0 ? "+100%" : "0%", isPos: true };
