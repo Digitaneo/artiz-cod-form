@@ -96,7 +96,7 @@ export async function publicFormConfigRoute(request, env) {
       { formConfig, shippingConfig, paymentConfig, trackingConfig },
       200,
       {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=300"
+        "Cache-Control": "no-cache, no-store, must-revalidate"
       }
     );
   } catch (err) {

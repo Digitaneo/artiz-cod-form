@@ -3498,15 +3498,18 @@ export async function dashboardEmbeddedRoute(request, env) {
             <!-- Main Toggle -->
             <div class="form-toggle" style="border-bottom: 1px solid var(--p-color-border-subdued); padding-bottom: 18px; margin-bottom: 20px;">
               <div>
-                <label for="cfg-boost-exitIntent-enabled" style="font-size: 15px; font-weight: 700;">Enable Exit-Intent Discount Popup</label>
+                <span style="font-size: 15px; font-weight: 700; color: var(--p-color-text, #0f172a); display: block;">Enable Exit-Intent Discount Popup (تفعيل نافذة الخصم عند الإغلاق)</span>
                 <div style="font-size: 12.5px; color: var(--p-color-text-subdued); margin-top: 2px;">
                   Triggers an interactive discount offer popup when a customer tries to close the checkout form without completing their order.
                 </div>
               </div>
-              <label class="switch">
-                <input type="checkbox" id="cfg-boost-exitIntent-enabled" ${exitIntentCfg.enabled ? "checked" : ""}>
-                <span class="slider"></span>
-              </label>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="cfg-boost-exitIntent-status" style="font-size: 13px; font-weight: 700; color: ${exitIntentCfg.enabled ? '#10b981' : '#64748b'};">${exitIntentCfg.enabled ? 'ON' : 'OFF'}</span>
+                <label class="switch">
+                  <input type="checkbox" id="cfg-boost-exitIntent-enabled" ${exitIntentCfg.enabled ? "checked" : ""} onchange="var s = document.getElementById('cfg-boost-exitIntent-status'); if(s){ s.textContent = this.checked ? 'ON' : 'OFF'; s.style.color = this.checked ? '#10b981' : '#64748b'; }">
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
 
             <!-- Discount Code & Badge -->
