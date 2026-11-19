@@ -251,24 +251,8 @@ export class OrderService {
       } catch (_) {}
     }
 
-    // Ensure customer has phone on profile if missing (without appending duplicate address records)
-    if (existingCustomerId && formattedPhone) {
-      try {
-        await this.shopifyService.restRequest(
-          shop,
-          `customers/${existingCustomerId}.json`,
-          "PUT",
-          {
-            customer: {
-              id: existingCustomerId,
-              phone: formattedPhone
-            }
-          }
-        );
-      } catch (updateCustErr) {
-        console.warn("Customer profile phone sync warning:", updateCustErr?.message);
-      }
-    }
+    // Customer phone profile is linked automatically via purchasingEntity / customer ID in order creation
+    // Skipping redundant blocking customer PUT to save ~400ms latency on checkout!
 
     // Method 1: DraftOrder Instant Completion (Primary: Enables Shopify Admin Order Editing, Customer Profile Link & Addresses)
     try {
